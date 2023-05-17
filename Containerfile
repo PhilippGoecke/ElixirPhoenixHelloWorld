@@ -47,7 +47,10 @@ RUN mix phx.new hello_app --database sqlite3 \
 WORKDIR /hello_app
 
 RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs
+RUN sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs
 
 EXPOSE 4000
 
-CMD mix phx.server
+CMD MIX_ENV=dev mix phx.server
+
+HEALTHCHECK CMD curl -f "http://localhost:4000/" || exit 1
