@@ -34,6 +34,7 @@ RUN apt update && apt upgrade -y \
   && mix local.rebar --force \
   # install phoenix 1.7.2
   && mix archive.install hex phx_new --force \
+  && mix phx.new --version \
   # make image smaller
   && apt purge -y --auto-remove curl unzip \
   && rm -rf "/var/lib/apt/lists/*" \
@@ -49,8 +50,14 @@ WORKDIR /hello_app
 RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs
 RUN sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs
 
+RUN mix phx.routes \
+  && mix phx.gen.html Blog Post posts title:string content:text \
+  && mix ecto.migrate \
+  && mix phx.routes
+
 EXPOSE 4000
 
-CMD MIX_ENV=dev mix phx.server
+#CMD MIX_ENV=dev mix phx.server
+CMD MIX_ENV=prod DATABASE_PATH=/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
 
 HEALTHCHECK CMD curl -f "http://localhost:4000/" || exit 1
