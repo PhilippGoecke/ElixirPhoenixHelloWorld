@@ -50,6 +50,7 @@ WORKDIR /hello_app
 RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs
 RUN sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs
 
+# https://devhints.io/phoenix
 RUN mix phx.routes \
   && mix phx.gen.html Blog Post posts title:string content:text \
   && mix ecto.migrate \
