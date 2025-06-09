@@ -1,4 +1,4 @@
-FROM debian:bullseye-slim as build-env
+FROM debian:bookworm-slim as build-env
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV LANG C.UTF-8
@@ -15,7 +15,7 @@ RUN apt update && apt upgrade -y \
   && apt install -y --no-install-recommends sqlite3 build-essential \
   # install erlang
   && apt install -y --no-install-recommends procps libncurses5 libncurses5-dev libwxgtk3.0-gtk3-0v5 libwxbase3.0-dev libsctp1 \
-  && curl https://packages.erlang-solutions.com/erlang/debian/pool/esl-erlang_25.3-1~debian~bullseye_amd64.deb --output erlang.deb \
+  && curl https://packages.erlang-solutions.com/erlang/debian/pool/esl-erlang_25.3-1~debian~bookworm_amd64.deb --output erlang.deb \
   && echo "e3d6766515900b53130aaec1ebaedbe1b5344745aae5bcf9854e3d58699912a224e7f8c4b2071350454949e687456056e5d7f6e7430dba07358c56848c69148d  erlang.deb" > erlang.deb.sha512 \
   && sha512sum -c erlang.deb.sha512 \
   && dpkg -i erlang.deb \
