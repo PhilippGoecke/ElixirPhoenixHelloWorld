@@ -18,8 +18,8 @@ RUN apt update && apt upgrade -y \
   && apt update && apt install -y erlang \
   && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   # install elixir
-  && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.17.3/elixir-otp-27.zip --output elixir.zip \
-  && echo "56c70369bcc8177a3aee998ae3ea7296253f33f3dcc7fe8ced6d425deb4362f99ff56ff2a146e42db8d3c88604c848bed868d27119d8497c3494dcbf41251aa7  elixir.zip" > elixir.zip.sha512 \
+  && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.14.5/elixir-otp-25.zip --output elixir.zip \
+  && echo "b605955672cd670766ae14c1d369b5745a35320f6aaf445fe62e398ed42e4a75e3e7b564f579c4dd203dfeba069e5070d68c9e47baf8ac7fbe57c529c10b4b5a  elixir.zip" > elixir.zip.sha512 \
   && sha512sum -c elixir.zip.sha512 \
   && unzip elixir.zip -d /usr/local \
   && rm elixir.zip \
