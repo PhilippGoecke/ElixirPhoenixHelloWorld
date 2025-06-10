@@ -14,12 +14,12 @@ RUN apt update && apt upgrade -y \
   # install db
   && apt install -y --no-install-recommends sqlite3 build-essential \
   # install erlang
-  #&& apt install -y --no-install-recommends procps libncurses5 libncurses5-dev libwxgtk-gl3.2-1 libwxbase3.2-1 libsctp1 \
+  && apt install -y --no-install-recommends procps libncurses5 libncurses5-dev libwxgtk-gl3.2-1 libwxbase3.2-1 libsctp1 \
   && apt update && apt install -y erlang \
   && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   # install elixir
-  && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.19-latest/elixir-otp-28.zip --output elixir.zip \
-  && echo "e13d11a2a782f25f17fea55d7f780f6d356c7a40b4df0168e110a6c66d6b2e790f2ac7e9a9bff34decd4ee3d2ebfc114d6e01cb5cf0c42acf3df5ea48d9ff70a  elixir.zip" > elixir.zip.sha512 \
+  && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.18.4/elixir-otp-27.zip --output elixir.zip \
+  && echo "b99578256a4b79c18ad7cb3ddbc5ff6865f775bb3a537cc08ba050eec308de7671bf1673320bd0aa3deb32307fa2b7f1878116b34522734832c09109e925ec5a  elixir.zip" > elixir.zip.sha512 \
   && sha512sum -c elixir.zip.sha512 \
   && unzip elixir.zip -d /usr/local \
   && rm elixir.zip \
