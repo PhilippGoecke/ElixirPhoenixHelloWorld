@@ -6,7 +6,7 @@ ENV LC_ALL C.UTF-8
 
 RUN apt update && apt upgrade -y \
   # install tools
-  && apt install -y --no-install-recommends unzip curl \
+  && apt install -y --no-install-recommends unzip curl git \
   # install node.js/npm
   && apt install -y --no-install-recommends nodejs npm \
   # install phoenix dependencies
@@ -14,16 +14,12 @@ RUN apt update && apt upgrade -y \
   # install db
   && apt install -y --no-install-recommends sqlite3 build-essential \
   # install erlang
-  && apt install -y --no-install-recommends procps libncurses5 libncurses5-dev libwxgtk-gl3.2-1 libwxbase3.2-1 libsctp1 \
-  #&& curl https://packages.erlang-solutions.com/erlang/debian/pool/esl-erlang_25.3-1~debian~bookworm_amd64.deb --output erlang.deb \
-  #&& echo "e3d6766515900b53130aaec1ebaedbe1b5344745aae5bcf9854e3d58699912a224e7f8c4b2071350454949e687456056e5d7f6e7430dba07358c56848c69148d  erlang.deb" > erlang.deb.sha512 \
-  #&& sha512sum -c erlang.deb.sha512 \
-  #&& dpkg -i erlang.deb \
+  #&& apt install -y --no-install-recommends procps libncurses5 libncurses5-dev libwxgtk-gl3.2-1 libwxbase3.2-1 libsctp1 \
   && apt update && apt install -y erlang \
   && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   # install elixir
-  && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.14.4/elixir-otp-23.zip --output elixir.zip \
-  && echo "c626c08b42e29a29aa91fcc744c6f5da9d3c1cb4a7f50fdee1e290217bd03d038fd9fd5e42bf223f48eb2042d5b264384648b84791d07f956979814f6ed02b07  elixir.zip" > elixir.zip.sha512 \
+  && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.19-latest/elixir-otp-28.zip --output elixir.zip \
+  && echo "e13d11a2a782f25f17fea55d7f780f6d356c7a40b4df0168e110a6c66d6b2e790f2ac7e9a9bff34decd4ee3d2ebfc114d6e01cb5cf0c42acf3df5ea48d9ff70a  elixir.zip" > elixir.zip.sha512 \
   && sha512sum -c elixir.zip.sha512 \
   && unzip elixir.zip -d /usr/local \
   && rm elixir.zip \
@@ -41,6 +37,7 @@ RUN apt update && apt upgrade -y \
   && rm -rf /var/cache/apt/archives
 
 # https://hexdocs.pm/phoenix/up_and_running.html
+# mix phx.new "$app_name" $db_option $app_args --install --from-elixir-install
 RUN mix phx.new hello_app --database sqlite3 \
   && cd hello_app \
   && mix deps.get
@@ -58,7 +55,6 @@ RUN mix phx.routes \
 
 EXPOSE 4000
 
-#CMD MIX_ENV=dev mix phx.server
 CMD MIX_ENV=prod DATABASE_PATH=/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
 
 HEALTHCHECK CMD curl -f "http://localhost:4000/" || exit 1
