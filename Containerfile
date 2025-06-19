@@ -18,7 +18,7 @@ RUN apt update && apt upgrade -y \
   && apt update && apt install -y erlang \
   && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   # install elixir
-  && curl --location https://urldefense.com/v3/__https://github.com/elixir-lang/elixir/releases/download/v1.14.5/elixir-otp-25.zip__;!!EJ3n55FBLexp1rhr!9sYDkkb9Gm43lGFA8A2GCQIb1UYfDsgZvp6c99tbYEDY3OM-7rw9G5YzD3BArNWo5ceRlaUThL3KklFYLVRV_H-XRRXP$  --output elixir.zip \
+  && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.14.5/elixir-otp-25.zip --output elixir.zip \
   && echo "b605955672cd670766ae14c1d369b5745a35320f6aaf445fe62e398ed42e4a75e3e7b564f579c4dd203dfeba069e5070d68c9e47baf8ac7fbe57c529c10b4b5a  elixir.zip" > elixir.zip.sha512 \
   && sha512sum -c elixir.zip.sha512 \
   && unzip elixir.zip -d /usr/local \
@@ -36,9 +36,8 @@ RUN apt update && apt upgrade -y \
   && rm -rf "/var/lib/apt/lists/*" \
   && rm -rf /var/cache/apt/archives
 
-# https://urldefense.com/v3/__https://hexdocs.pm/phoenix/up_and_running.html__;!!EJ3n55FBLexp1rhr!9sYDkkb9Gm43lGFA8A2GCQIb1UYfDsgZvp6c99tbYEDY3OM-7rw9G5YzD3BArNWo5ceRlaUThL3KklFYLVRV_KwIFkAA$
-# mix phx.new "$app_name" $db_option $app_args --install --from-elixir-install RUN mix phx.new --version \
-  #&& mix phx.new hello_app --module Greeting --app helloworld --no-ecto --no-dashboard \
+# https://hexdocs.pm/phoenix/up_and_running.html
+RUN mix phx.new --version \
   && mix phx.new hello_app --module Greeting --app helloworld --database sqlite3 --no-dashboard \
   && cd hello_app \
   && export SECRET_KEY_BASE=$(mix phx.gen.secret) \
@@ -48,9 +47,10 @@ RUN apt update && apt upgrade -y \
 
 WORKDIR /hello_app
 
-RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs RUN sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs
+RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
+  && sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs
 
-# https://urldefense.com/v3/__https://devhints.io/phoenix__;!!EJ3n55FBLexp1rhr!9sYDkkb9Gm43lGFA8A2GCQIb1UYfDsgZvp6c99tbYEDY3OM-7rw9G5YzD3BArNWo5ceRlaUThL3KklFYLVRV_GQ1AH3x$
+# https://devhints.io/phoenix
 RUN mix phx.routes \
   && mix phx.gen.html Welcome Hello hello name:string \
   && sed -i "s%get \"/\"%  resources \"hello\", HelloController\n#get \"\/\"%g" lib/helloworld_web/router.ex \
@@ -65,4 +65,4 @@ EXPOSE 4000
 
 CMD MIX_ENV=prod DATABASE_PATH=/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
 
-HEALTHCHECK CMD curl -f "https://urldefense.com/v3/__http://localhost:4000/__;!!EJ3n55FBLexp1rhr!9sYDkkb9Gm43lGFA8A2GCQIb1UYfDsgZvp6c99tbYEDY3OM-7rw9G5YzD3BArNWo5ceRlaUThL3KklFYLVRV_NUzgyzu$ " || exit 1
+HEALTHCHECK CMD curl -f "http://localhost:4000/" || exit 1
