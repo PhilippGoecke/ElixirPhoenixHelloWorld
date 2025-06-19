@@ -53,9 +53,10 @@ RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
 # https://devhints.io/phoenix
 RUN mix phx.routes \
   && mix phx.gen.html Welcome Hello hello name:string \
-  && sed -i "s%get \"/\"%  resources \"hello\", HelloController\n#get \"\/\"%g" lib/helloworld_web/router.ex \
-  && sed -i "s?def index?def world(conn, %{\"name\" => name}) do\n    render conn, \"world.html\", name: name\n  end\n\n  def index?g" lib/helloworld_web/router.ex \
+  && sed -i "s%get \"/\"%get \"/hello/:name\", HelloController, :world\n#get \"\/\"%g" lib/helloworld_web/router.ex \
+  && sed -i "s?def index?def world(conn, %{\"name\" => name}) do\n    render(conn, \"world.html\", name: name)\n  end\n\n  def index?g" lib/helloworld_web/controllers/hello_controller.ex \
   && cat lib/helloworld_web/controllers/hello_controller.ex \
+  && mkdir -p lib/helloworld_web/controllers/hello_html \
   && echo "<h1>Hello <%= @name %>!</h1>" > lib/helloworld_web/controllers/hello_html/world.html.heex \
   && mix ecto.migrate \
   && mix phx.routes \
