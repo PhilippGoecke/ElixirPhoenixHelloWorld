@@ -32,16 +32,6 @@ RUN apt update && apt upgrade -y \
     && make -j$(nproc) \
     && make install ) \
   && find /usr/local -name examples | xargs rm -rf \
-  # install rebar3
-  #&& mkdir -p /usr/src/rebar3-src \
-  #&& curl -fSL -o rebar3-src.tar.gz "https://github.com/erlang/rebar3/archive/3.25.0.tar.gz" \
-  #&& echo "7d3f42dc0e126e18fb73e4366129f11dd37bad14d404f461e0a3129ce8903440 rebar3-src.tar.gz" | sha256sum -c - \
-  #&& tar -xzf rebar3-src.tar.gz -C /usr/src/rebar3-src --strip-components=1 \
-  #&& rm rebar3-src.tar.gz \
-  #&& cd /usr/src/rebar3-src \
-  #&& HOME=$PWD ./bootstrap \
-  #&& install -v ./rebar3 /usr/local/bin/ \
-  #&& rm -rf /usr/src/rebar3-src \
   && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   # install elixir
   && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.17.3/elixir-otp-26.zip --output elixir.zip \
@@ -78,12 +68,8 @@ RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
 
 # https://devhints.io/phoenix
 RUN mix phx.routes \
-  #&& mix phx.gen.html Welcome Hello hello name:string \
   && sed -i "s%get \"/\"%get \"/hello/:name\", HelloController, :world\n    #get \"\/\"%g" lib/helloworld_web/router.ex \
-  && cat lib/helloworld_web/router.ex \
-  #&& sed -i "s?def index?def world(conn, %{\"name\" => name}) do\n    render(conn, \"world.html\", name: name)\n  end\n\n  def index?g" lib/helloworld_web/controllers/hello_controller.ex \
   && echo "def world(conn, %{\"name\" => name}) do\n    render(conn, \"world.html\", name: name)\n  end" > lib/helloworld_web/controllers/hello_controller.ex \
-  && cat lib/helloworld_web/controllers/hello_controller.ex \
   && mkdir -p lib/helloworld_web/controllers/hello_html \
   && echo "<h1>Hello <%= @name %>!</h1>" > lib/helloworld_web/controllers/hello_html/world.html.heex \
   && mix ecto.migrate \
