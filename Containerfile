@@ -73,7 +73,7 @@ RUN mix phx.routes \
   && echo "defmodule GreetingWeb.HelloHTML do\n\n  use GreetingWeb, :html\n\n  embed_templates \"hello_html/*\"\nend" > lib/helloworld_web/controllers/hello_html.ex \
   && mkdir -p lib/helloworld_web/controllers/hello_html \
   && echo "<h1>Hello <%= @name %>!</h1>" > lib/helloworld_web/controllers/hello_html/world.html.heex \
-  && sed 's/.*<\/header>*//' lib/helloworld_web/components/layouts/app.html.heex \
+  && sed -zi 's/<header.*<\/header>//' lib/helloworld_web/components/layouts/app.html.heex \
   && cat lib/helloworld_web/components/layouts/app.html.heex \
   && mix ecto.migrate \
   && mix phx.routes \
