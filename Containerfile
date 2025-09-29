@@ -44,8 +44,8 @@ RUN apt update && apt upgrade -y \
   # install hex & rebar
   && mix local.hex --force \
   && mix local.rebar --force \
-  # install phoenix 1.7.21
-  && mix archive.install hex phx_new --force 1.7.21 \
+  # install phoenix 1.8.1
+  && mix archive.install hex phx_new --force 1.8.1 \
   && mix phx.new --version \
   # make image smaller
   && apt purge -y --auto-remove curl unzip \
