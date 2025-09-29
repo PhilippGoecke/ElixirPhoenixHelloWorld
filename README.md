@@ -8,6 +8,11 @@
 
 A minimal Phoenix starter to verify your Elixir setup and quickly spin up a web server.
 
+## 📦 Prerequisites
+
+- 🐋 Podman (optional, containers): https://podman.io
+- 🐳 Docker (optional, containers): https://www.docker.com
+
 ## 🔗 Sources
 
 Install Elixir & Erlang: https://elixir-lang.org/install.html  
