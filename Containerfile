@@ -69,7 +69,8 @@ RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
 # https://devhints.io/phoenix
 RUN mix phx.routes \
   && sed -i "s%get \"/\"%get \"/hello/:name\", HelloController, :world\n    #get \"\/\"%g" lib/helloworld_web/router.ex \
-  && echo "defmodule GreetingWeb.HelloController do\n  use GreetingWeb, :controller\n\n  def world(conn, params) do\n    name = params[\"name\"]\n    render(conn, \"world.html\", name: name)\n  end\nend\n" > lib/helloworld_web/controllers/hello_controller.ex \
+  && sed -i "/get \"\/hello\/:name\"/a\    get \"\/\", HelloController, :redirect_root" lib/helloworld_web/router.ex \
+  && echo "defmodule GreetingWeb.HelloController do\n  use GreetingWeb, :controller\n\n  def redirect_root(conn, _params) do\n    redirect(conn, to: ~p\"/hello/World\")\n  end\n\n  def world(conn, params) do\n    name = params[\"name\"]\n    render(conn, \"world.html\", name: name)\n  end\nend\n" > lib/helloworld_web/controllers/hello_controller.ex \
   && echo "defmodule GreetingWeb.HelloHTML do\n\n  use GreetingWeb, :html\n\n  embed_templates \"hello_html/*\"\nend" > lib/helloworld_web/controllers/hello_html.ex \
   && mkdir -p lib/helloworld_web/controllers/hello_html \
   && echo "<h1>Hello <%= @name %>!</h1>" > lib/helloworld_web/controllers/hello_html/world.html.heex \
