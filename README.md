@@ -26,6 +26,6 @@ bash podman-run-phoenix.bash
 Visit: http://localhost:4000/hello/World
 
 ## 📝 License
-MIT (add LICENSE file if missing)
+MIT
 
 Happy hacking! 💜
