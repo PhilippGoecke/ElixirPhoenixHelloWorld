@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim as build-env
+FROM debian:trixie-slim as build-env
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV LANG C.UTF-8
@@ -14,13 +14,13 @@ RUN apt update && apt upgrade -y \
   # install db
   && apt install -y --no-install-recommends sqlite3 build-essential \
   # install erlang runtime dependencies
-  && apt install -y --no-install-recommends libodbc1 libssl3 libsctp1 \
+  && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
   # install erlang build dependencies
   #&& apt install -y --no-install-recommends procps libncurses5 libncurses5-dev libwxgtk-gl3.2-1 libwxbase3.2-1 libsctp1 \
   && apt install -y --no-install-recommends autoconf dpkg-dev gcc g++ make libncurses-dev unixodbc-dev libssl-dev libsctp-dev \
   # install erlang
-  && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/archive/OTP-26.2.5.11.tar.gz" \
-  && echo "2eef7aac690a6cedfe0e6a20fc2d700db3490b4e4249683c0e5b812ad71304ed  otp-src.tar.gz" | sha256sum -c - \
+  && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/releases/download/OTP-28.1/otp_src_28.1.tar.gz" \
+  && echo "c7c6fe06a3bf0031187d4cb10d30e11de119b38bdba7cd277898f75d53bdb218  otp-src.tar.gz" | sha256sum --strict --check - \
   && export ERL_SRC="/usr/src/otp_src" \
   && mkdir -vp $ERL_SRC \
   && tar -xzf otp-src.tar.gz -C $ERL_SRC --strip-components=1 \
@@ -34,8 +34,8 @@ RUN apt update && apt upgrade -y \
   && find /usr/local -name examples | xargs rm -rf \
   && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   # install elixir
-  && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.17.3/elixir-otp-26.zip --output elixir.zip \
-  && echo "a64260dcc39d21350ebcfa58c633b6535aba2be5ece9523f80d5b4bd7c725f30  elixir.zip" | sha256sum -c - \
+  && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.19-latest/elixir-otp-28.zip --output elixir.zip \
+  && echo "e49d72499fe64605921edf6e93e32664e89e8f5b7fc650688bdd0163f70681dc  elixir.zip" | sha256sum --strict --check - \
   && unzip elixir.zip -d /usr/local \
   && rm elixir.zip \
   && elixir -v \
@@ -45,7 +45,7 @@ RUN apt update && apt upgrade -y \
   && mix local.hex --force \
   && mix local.rebar --force \
   # install phoenix 1.7.21
-  && mix archive.install hex phx_new --force \
+  && mix archive.install hex phx_new --force 1.7.21 \
   && mix phx.new --version \
   # make image smaller
   && apt purge -y --auto-remove curl unzip \
