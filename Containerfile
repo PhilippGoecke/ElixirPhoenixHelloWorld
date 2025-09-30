@@ -34,8 +34,8 @@ RUN apt update && apt upgrade -y \
   && find /usr/local -name examples | xargs rm -rf \
   && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   # install elixir
-  && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.19-latest/elixir-otp-28.zip --output elixir.zip \
-  && echo "e49d72499fe64605921edf6e93e32664e89e8f5b7fc650688bdd0163f70681dc  elixir.zip" | sha256sum --strict --check - \
+  && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.19.0-rc.0/elixir-otp-28.zip --output elixir.zip \
+  && echo "78f81744d29b314c1a82dc8e9f1215bd6c6845bb8608230ab17c2ae8d4d572a5  elixir.zip" | sha256sum --strict --check - \
   && unzip elixir.zip -d /usr/local \
   && rm elixir.zip \
   && elixir -v \
