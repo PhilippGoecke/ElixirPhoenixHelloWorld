@@ -7,12 +7,6 @@ ENV LC_ALL C.UTF-8
 RUN apt update && apt upgrade -y \
   # install tools
   && apt install -y --no-install-recommends unzip curl ca-certificates git \
-  # install node.js/npm
-  && apt install -y --no-install-recommends nodejs npm \
-  # install phoenix dependencies
-  && apt install -y --no-install-recommends inotify-tools \
-  # install db
-  && apt install -y --no-install-recommends sqlite3 build-essential \
   # install erlang runtime dependencies
   && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
   # install erlang build dependencies
@@ -43,23 +37,21 @@ RUN apt update && apt upgrade -y \
   # install hex & rebar
   && mix local.hex --force \
   && mix local.rebar --force \
-  && mix hex.info
+  && mix hex.info \
   # make image smaller
   && apt purge -y --auto-remove curl unzip \
   && rm -rf "/var/lib/apt/lists/*" \
   && rm -rf /var/cache/apt/archives
 
-FROM debian:trixie-slim as phoenix
+FROM debian:trixie-slim as phoenix_runtime
 
 RUN apt update && apt upgrade -y \
-  # install tools
-  && apt install -y --no-install-recommends unzip curl ca-certificates git \
   # install node.js/npm
   && apt install -y --no-install-recommends nodejs npm \
   # install phoenix dependencies
   && apt install -y --no-install-recommends inotify-tools \
   # install db
-  && apt install -y --no-install-recommends sqlite3 build-essential \
+  && apt install -y --no-install-recommends sqlite3 \
   # install erlang runtime dependencies
   && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
   # make image smaller
