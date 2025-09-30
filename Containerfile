@@ -1,4 +1,4 @@
-FROM debian:trixie-slim as build-env
+FROM debian:trixie-slim as phoenix_base
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV LANG C.UTF-8
@@ -16,7 +16,6 @@ RUN apt update && apt upgrade -y \
   # install erlang runtime dependencies
   && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
   # install erlang build dependencies
-  #&& apt install -y --no-install-recommends procps libncurses5 libncurses5-dev libwxgtk-gl3.2-1 libwxbase3.2-1 libsctp1 \
   && apt install -y --no-install-recommends autoconf dpkg-dev gcc g++ make libncurses-dev unixodbc-dev libssl-dev libsctp-dev \
   # install erlang
   && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/releases/download/OTP-28.1/otp_src_28.1.tar.gz" \
@@ -44,13 +43,39 @@ RUN apt update && apt upgrade -y \
   # install hex & rebar
   && mix local.hex --force \
   && mix local.rebar --force \
-  # install phoenix 1.8.1
-  && mix archive.install hex phx_new --force 1.8.1 \
-  && mix phx.new --version \
+  && mix hex.info
   # make image smaller
   && apt purge -y --auto-remove curl unzip \
   && rm -rf "/var/lib/apt/lists/*" \
   && rm -rf /var/cache/apt/archives
+
+FROM debian:trixie-slim as phoenix
+
+RUN apt update && apt upgrade -y \
+  # install tools
+  && apt install -y --no-install-recommends unzip curl ca-certificates git \
+  # install node.js/npm
+  && apt install -y --no-install-recommends nodejs npm \
+  # install phoenix dependencies
+  && apt install -y --no-install-recommends inotify-tools \
+  # install db
+  && apt install -y --no-install-recommends sqlite3 build-essential \
+  # install erlang runtime dependencies
+  && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
+  # make image smaller
+  && apt purge -y --auto-remove curl unzip \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+COPY --from=phoenix_base /usr/local /usr/local
+
+RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
+  && elixir -v \
+  && which mix
+
+  # install phoenix 1.7.21
+RUN mix archive.install hex phx_new --force 1.7.21 \
+  && mix phx.new --version \
 
 # https://hexdocs.pm/phoenix/up_and_running.html
 RUN mix phx.new --version \
