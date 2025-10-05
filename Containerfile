@@ -45,6 +45,10 @@ RUN apt update && apt upgrade -y \
 
 FROM debian:trixie-slim as phoenix_runtime
 
+ARG DEBIAN_FRONTEND=noninteractive
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+
 RUN apt update && apt upgrade -y \
   # install node.js/npm
   && apt install -y --no-install-recommends nodejs npm \
@@ -67,7 +71,7 @@ RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshel
 
   # install phoenix 1.7.21
 RUN mix archive.install hex phx_new --force 1.7.21 \
-  && mix phx.new --version \
+  && mix phx.new --version
 
 # https://hexdocs.pm/phoenix/up_and_running.html
 RUN mix phx.new --version \
