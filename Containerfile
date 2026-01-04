@@ -67,7 +67,6 @@ RUN apt update && apt upgrade -y \
   && rm -rf /var/cache/apt/archives
 
 COPY --from=phoenix_base /usr/local /usr/local
-COPY --from=phoenix_base /root /root
 
 RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   && elixir -v \
