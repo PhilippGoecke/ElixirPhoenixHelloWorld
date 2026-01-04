@@ -69,7 +69,7 @@ RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshel
   && elixir -v \
   && which mix
 
-  # install phoenix 1.7.21
+# install phoenix 1.7.21
 RUN mix archive.install hex phx_new --force 1.7.21 \
   && mix phx.new --version
 
