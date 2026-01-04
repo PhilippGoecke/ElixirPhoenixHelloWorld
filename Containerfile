@@ -13,7 +13,7 @@ RUN apt update && apt upgrade -y \
   && apt install -y --no-install-recommends autoconf dpkg-dev gcc g++ make libncurses-dev unixodbc-dev libssl-dev libsctp-dev \
   # install erlang
   && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/releases/download/OTP-28.3/otp_src_28.3.tar.gz" \
-  && echo "1956ad6584678b631ab4f9b8aebe2dac037cd7401abb44564a01134ff0ac5bed  otp-src.tar.gz" | sha256sum --strict --check - \
+  && echo "1956ad6584678b631ab4f9b8aebe2dac037cd7401abb44564a01134ff0ac5bed otp-src.tar.gz" | sha256sum --strict --check - \
   && export ERL_SRC="/usr/src/otp_src" \
   && mkdir -vp $ERL_SRC \
   && tar -xzf otp-src.tar.gz -C $ERL_SRC --strip-components=1 \
@@ -28,7 +28,7 @@ RUN apt update && apt upgrade -y \
   && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   # install elixir
   && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.19.4/elixir-otp-28.zip --output elixir.zip \
-  && echo "8fd7b5705b756c0e1ec71f9e8281b4b75801b9564f0205b5035319e8505ad2b4  elixir.zip" | sha256sum --strict --check - \
+  && echo "8fd7b5705b756c0e1ec71f9e8281b4b75801b9564f0205b5035319e8505ad2b4 elixir.zip" | sha256sum --strict --check - \
   && unzip elixir.zip -d /usr/local \
   && rm elixir.zip \
   && elixir -v \
@@ -50,6 +50,8 @@ ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
 RUN apt update && apt upgrade -y \
+  # install tools
+  && apt install -y --no-install-recommends git \
   # install node.js/npm
   && apt install -y --no-install-recommends nodejs npm \
   # install phoenix dependencies
@@ -58,12 +60,14 @@ RUN apt update && apt upgrade -y \
   && apt install -y --no-install-recommends sqlite3 \
   # install erlang runtime dependencies
   && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
+  # install healthcheck dependencies
+  && apt install -y --no-install-recommends curl \
   # make image smaller
-  && apt purge -y --auto-remove curl unzip \
   && rm -rf "/var/lib/apt/lists/*" \
   && rm -rf /var/cache/apt/archives
 
 COPY --from=phoenix_base /usr/local /usr/local
+COPY --from=phoenix_base /root /root
 
 RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   && elixir -v \
@@ -89,11 +93,11 @@ RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
 
 # https://devhints.io/phoenix
 RUN mix phx.routes \
-  && sed -i "s%get \"/\"%get \"/hello/:name\", HelloController, :world\n    #get \"\/\"%g" lib/helloworld_web/router.ex \
-  && echo "defmodule GreetingWeb.HelloController do\n  use GreetingWeb, :controller\n\n  def world(conn, params) do\n    name = params[\"name\"]\n    render(conn, \"world.html\", name: name)\n  end\nend\n" > lib/helloworld_web/controllers/hello_controller.ex \
-  && echo "defmodule GreetingWeb.HelloHTML do\n\n  use GreetingWeb, :html\n\n  embed_templates \"hello_html/*\"\nend" > lib/helloworld_web/controllers/hello_html.ex \
+  && sed -i "s%get \"/\"%get \"/hello/:name\", HelloController, :world\n #get \"\/\"%g" lib/helloworld_web/router.ex \
+  && echo "defmodule GreetingWeb.HelloController do\n use GreetingWeb, :controller\n\n def world(conn, params) do\n name = params[\"name\"]\n render(conn, \"world.html\", name: name)\n end\nend\n" > lib/helloworld_web/controllers/hello_controller.ex \
+  && echo "defmodule GreetingWeb.HelloHTML do\n\n use GreetingWeb, :html\n\n embed_templates \"hello_html/*\"\nend" > lib/helloworld_web/controllers/hello_html.ex \
   && mkdir -p lib/helloworld_web/controllers/hello_html \
-  && echo "<h1>Hello <%= @name %>!</h1>\n  <!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> -->" > lib/helloworld_web/controllers/hello_html/world.html.heex \
+  && echo "<h1>Hello <%= @name %>!</h1>\n <!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> -->" > lib/helloworld_web/controllers/hello_html/world.html.heex \
   && sed -zi 's/<header.*<\/header>//' lib/helloworld_web/components/layouts/app.html.heex \
   && cat lib/helloworld_web/components/layouts/app.html.heex \
   && mix ecto.migrate \
