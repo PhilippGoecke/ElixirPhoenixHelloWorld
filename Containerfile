@@ -73,8 +73,8 @@ RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshel
   && elixir -v \
   && which mix
 
-# install phoenix 1.7.21
-RUN mix archive.install hex phx_new --force 1.7.21 \
+# install phoenix 1.8.3
+RUN mix archive.install hex phx_new --force 1.8.3 \
   && mix phx.new --version
 
 # https://hexdocs.pm/phoenix/up_and_running.html
@@ -98,8 +98,6 @@ RUN mix phx.routes \
   && echo "defmodule GreetingWeb.HelloHTML do\n\n use GreetingWeb, :html\n\n embed_templates \"hello_html/*\"\nend" > lib/helloworld_web/controllers/hello_html.ex \
   && mkdir -p lib/helloworld_web/controllers/hello_html \
   && echo "<h1>Hello <%= @name %>!</h1>\n <!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> -->" > lib/helloworld_web/controllers/hello_html/world.html.heex \
-  && sed -zi 's/<header.*<\/header>//' lib/helloworld_web/components/layouts/app.html.heex \
-  && cat lib/helloworld_web/components/layouts/app.html.heex \
   && mix ecto.migrate \
   && mix phx.routes \
   && mix phx.digest
