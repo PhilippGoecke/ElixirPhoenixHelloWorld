@@ -1,0 +1,153 @@
+FROM debian:trixie-slim as phoenix_base
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+
+RUN apt update && apt upgrade -y \
+  # install tools
+  && apt install -y --no-install-recommends unzip curl ca-certificates git \
+  # install erlang runtime dependencies
+  && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
+  # install erlang build dependencies
+  && apt install -y --no-install-recommends autoconf dpkg-dev gcc g++ make libncurses-dev unixodbc-dev libssl-dev libsctp-dev \
+  # install erlang
+  && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/releases/download/OTP-28.3/otp_src_28.3.tar.gz" \
+  && echo "1956ad6584678b631ab4f9b8aebe2dac037cd7401abb44564a01134ff0ac5bed otp-src.tar.gz" | sha256sum --strict --check - \
+  && export ERL_SRC="/usr/src/otp_src" \
+  && mkdir -vp $ERL_SRC \
+  && tar -xzf otp-src.tar.gz -C $ERL_SRC --strip-components=1 \
+  && rm otp-src.tar.gz \
+  && ( cd $ERL_SRC \
+    && ./otp_build autoconf \
+    && gnuArch="$(dpkg-architecture --query DEB_HOST_GNU_TYPE)" \
+    && ./configure --build="$gnuArch" \
+    && make -j$(nproc) \
+    && make install ) \
+  && find /usr/local -name examples | xargs rm -rf \
+  && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
+  # install elixir
+  && curl --location https://github.com/elixir-lang/elixir/releases/download/v1.19.4/elixir-otp-28.zip --output elixir.zip \
+  && echo "8fd7b5705b756c0e1ec71f9e8281b4b75801b9564f0205b5035319e8505ad2b4 elixir.zip" | sha256sum --strict --check - \
+  && unzip elixir.zip -d /usr/local \
+  && rm elixir.zip \
+  && elixir -v \
+  # Elixir build tool
+  && which mix \
+  # install hex & rebar
+  && mix local.hex --force \
+  && mix local.rebar --force \
+  && mix hex.info \
+  # make image smaller
+  && apt purge -y --auto-remove curl unzip \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+FROM debian:trixie-slim as phoenix_runtime
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+
+RUN apt update && apt upgrade -y \
+  # install tools
+  && apt install -y --no-install-recommends git \
+  # install node.js/npm
+  && apt install -y --no-install-recommends nodejs npm \
+  # install phoenix dependencies
+  && apt install -y --no-install-recommends inotify-tools \
+  # install db
+  && apt install -y --no-install-recommends sqlite3 \
+  # install erlang runtime dependencies
+  && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
+  # install healthcheck dependencies
+  && apt install -y --no-install-recommends curl \
+  # make image smaller
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+COPY --from=phoenix_base /usr/local /usr/local
+
+RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
+  && elixir -v \
+  && which mix
+
+# install phoenix 1.8.3
+RUN mix archive.install hex phx_new --force 1.8.3 \
+  && mix phx.new --version
+
+# https://hexdocs.pm/phoenix/up_and_running.html
+RUN mix phx.new --version \
+  && mix phx.new hello_app --module Greeting --app helloworld --database sqlite3 --no-dashboard \
+  && cd hello_app \
+  && export SECRET_KEY_BASE=$(mix phx.gen.secret) \
+  && mix deps.get \
+  && mix assets.setup \
+  && mix deps.compile
+
+WORKDIR /hello_app
+
+RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
+  && sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs
+
+# ---------------------------------------------------------------------------
+# Showcase Phoenix features
+# ---------------------------------------------------------------------------
+# https://devhints.io/phoenix
+#
+# 1) Plain controller + HEEx template  (classic request/response)
+# 2) `mix phx.gen.html`                (context + schema + CRUD UI + tests)
+# 3) `mix phx.gen.json`                (JSON REST API + context reuse)
+# 4) `mix phx.gen.live`                (LiveView CRUD with real-time updates)
+# 5) `mix phx.gen.channel`             (WebSocket channels via Phoenix.Channel)
+# 6) `mix phx.gen.auth`                (full authentication system)
+# 7) `mix phx.gen.presence`            (Phoenix.Presence for tracking users)
+# 8) Telemetry, PubSub, Ecto migrations, asset pipeline (esbuild + tailwind)
+# ---------------------------------------------------------------------------
+
+# (1) Plain controller + HEEx template showing app/runtime versions
+RUN mix phx.routes \
+  && sed -i "s%get \"/\"%get \"/hello/:name\", HelloController, :world\n #get \"\/\"%g" lib/helloworld_web/router.ex \
+  && echo "defmodule GreetingWeb.HelloController do\n use GreetingWeb, :controller\n\n def world(conn, params) do\n name = params[\"name\"]\n render(conn, \"world.html\", name: name)\n end\nend\n" > lib/helloworld_web/controllers/hello_controller.ex \
+  && echo "defmodule GreetingWeb.HelloHTML do\n\n use GreetingWeb, :html\n\n embed_templates \"hello_html/*\"\nend" > lib/helloworld_web/controllers/hello_html.ex \
+  && mkdir -p lib/helloworld_web/controllers/hello_html \
+  && echo "<h1>Hello <%= @name %>!</h1>\n <!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> -->" > lib/helloworld_web/controllers/hello_html/world.html.heex
+
+# (2) HTML CRUD generator: context `Blog`, schema `Post` -> /posts
+RUN mix phx.gen.html Blog Post posts title:string body:text views:integer --no-context --no-schema 2>/dev/null; \
+    mix phx.gen.html Blog Post posts title:string body:text views:integer \
+  && sed -i "/scope \"\/\", GreetingWeb do/a\\    resources \"/posts\", PostController" lib/helloworld_web/router.ex
+
+# (3) JSON REST API generator: /api/products
+RUN mix phx.gen.json Catalog Product products name:string price:float sku:string:unique \
+  && sed -i "/scope \"\/api\", GreetingWeb do/,/^  end/{s%pipe_through :api%pipe_through :api\n    resources \"/products\", ProductController, except: [:new, :edit]%}" lib/helloworld_web/router.ex \
+  || true
+
+# (4) LiveView CRUD with real-time updates via Phoenix.PubSub
+RUN mix phx.gen.live Chat Message messages user:string body:text \
+  && sed -i "/scope \"\/\", GreetingWeb do/a\\    live \"/messages\", MessageLive.Index, :index\n    live \"/messages/new\", MessageLive.Index, :new\n    live \"/messages/:id/edit\", MessageLive.Index, :edit\n    live \"/messages/:id\", MessageLive.Show, :show\n    live \"/messages/:id/show/edit\", MessageLive.Show, :edit" lib/helloworld_web/router.ex \
+  || true
+
+# (5) WebSocket channel (Phoenix.Channel) for "room:lobby"
+RUN mix phx.gen.channel Room || true
+
+# (6) Authentication scaffolding (mix phx.gen.auth)
+RUN mix deps.get \
+  && (yes | mix phx.gen.auth Accounts User users --hashing-lib bcrypt) || true \
+  && mix deps.get
+
+# (7) Phoenix.Presence for tracking connected users
+RUN mix phx.gen.presence || true
+
+# Run migrations for everything generated above, then compile & digest assets
+RUN mix ecto.migrate \
+  && mix compile \
+  && mix phx.routes \
+  && mix assets.deploy \
+  && mix phx.digest
+
+EXPOSE 4000
+
+CMD MIX_ENV=prod DATABASE_PATH=/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
+
+HEALTHCHECK CMD curl -f "http://localhost:4000/" || exit 1
