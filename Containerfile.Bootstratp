@@ -1,90 +1,135 @@
-FROM debian:trixie-slim as phoenix_base
+# syntax=docker/dockerfile:1
+# Phoenix bootstrap example
+# Builds a minimal "Hello, Phoenix!" app from scratch using Elixir + Phoenix.
+
+###############################################################################
+# Stage 1: build Erlang/OTP + Elixir toolchain
+###############################################################################
+FROM debian:trixie-slim AS toolchain
 
 ARG DEBIAN_FRONTEND=noninteractive
-ENV LANG C.UTF-8
-ENV LC_ALL C.UTF-8
+ARG OTP_VERSION=28.5
+ARG OTP_SHA256=2c7e8ca23e6864eb20eff5d44738bfa123aed8cd21ed6d98e533d751eee28d9c
+ARG ELIXIR_VERSION=1.19.5
+ARG ELIXIR_SHA256=ca481510feb6dabc875bba43e44b25c7abafa53bd7a103639851b7aeace8a022
 
-RUN apt update && apt upgrade -y \
-  # install tools
-  && apt install -y --no-install-recommends unzip curl ca-certificates git \
-  # install erlang runtime dependencies
-  && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
-  # install erlang build dependencies
-  && apt install -y --no-install-recommends autoconf dpkg-dev gcc g++ make libncurses-dev unixodbc-dev libssl-dev libsctp-dev \
-  # install erlang
-  && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/releases/download/OTP-28.5/otp_src_28.5.tar.gz" \
-  && echo "2c7e8ca23e6864eb20eff5d44738bfa123aed8cd21ed6d98e533d751eee28d9c otp-src.tar.gz" | sha256sum --strict --check - \
-  && export ERL_SRC="/usr/src/otp_src" \
-  && mkdir -vp $ERL_SRC \
-  && tar -xzf otp-src.tar.gz -C $ERL_SRC --strip-components=1 \
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+
+RUN apt-get update && apt-get upgrade -y \
+  && apt-get install -y --no-install-recommends \
+       ca-certificates curl unzip git \
+       libodbc2 libssl3 libsctp1 \
+       autoconf dpkg-dev gcc g++ make \
+       libncurses-dev unixodbc-dev libssl-dev libsctp-dev \
+  # --- build Erlang/OTP from source ---
+  && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/releases/download/OTP-${OTP_VERSION}/otp_src_${OTP_VERSION}.tar.gz" \
+  && echo "${OTP_SHA256} otp-src.tar.gz" | sha256sum --strict --check - \
+  && mkdir -vp /usr/src/otp_src \
+  && tar -xzf otp-src.tar.gz -C /usr/src/otp_src --strip-components=1 \
   && rm otp-src.tar.gz \
-  && ( cd $ERL_SRC \
-    && ./otp_build autoconf \
-    && gnuArch="$(dpkg-architecture --query DEB_HOST_GNU_TYPE)" \
-    && ./configure --build="$gnuArch" \
-    && make -j$(nproc) \
-    && make install ) \
-  && find /usr/local -name examples | xargs rm -rf \
+  && cd /usr/src/otp_src \
+  && ./otp_build autoconf \
+  && ./configure --build="$(dpkg-architecture --query DEB_HOST_GNU_TYPE)" \
+  && make -j"$(nproc)" \
+  && make install \
+  && cd / && rm -rf /usr/src/otp_src \
+  && find /usr/local -name examples -exec rm -rf {} + \
   && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
-  # install elixir
-  && curl --output elixir.zip --location https://github.com/elixir-lang/elixir/releases/download/v1.19.5/elixir-otp-28.zip \
-  && echo "ca481510feb6dabc875bba43e44b25c7abafa53bd7a103639851b7aeace8a022 elixir.zip" | sha256sum --strict --check - \
-  && unzip elixir.zip -d /usr/local \
+  # --- install Elixir prebuilt for OTP 28 ---
+  && curl -fSL -o elixir.zip "https://github.com/elixir-lang/elixir/releases/download/v${ELIXIR_VERSION}/elixir-otp-28.zip" \
+  && echo "${ELIXIR_SHA256} elixir.zip" | sha256sum --strict --check - \
+  && unzip -q elixir.zip -d /usr/local \
   && rm elixir.zip \
   && elixir -v \
-  # Elixir build tool
-  && which mix \
-  # install hex & rebar
+  # --- install hex & rebar ---
   && mix local.hex --force \
   && mix local.rebar --force \
-  && mix hex.info \
-  # make image smaller
-  && apt purge -y --auto-remove curl unzip \
-  && rm -rf "/var/lib/apt/lists/*" \
-  && rm -rf /var/cache/apt/archives
+  # --- cleanup ---
+  && apt-get purge -y --auto-remove curl unzip \
+  && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
-FROM debian:trixie-slim as elixir_runtime
+###############################################################################
+# Stage 2: runtime image with a generated Phoenix bootstrap app
+###############################################################################
+FROM debian:trixie-slim AS phoenix_bootstrap
 
 ARG DEBIAN_FRONTEND=noninteractive
-ENV LANG C.UTF-8
-ENV LC_ALL C.UTF-8
+ARG PHX_NEW_VERSION=1.8.7
+ARG APP_NAME=helloworld
+ARG APP_MODULE=Greeting
 
-RUN apt update && apt upgrade -y \
-  # install tools
-  && apt install -y --no-install-recommends git ca-certificates \
-  # install erlang runtime dependencies
-  && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
-  # make image smaller
-  && rm -rf "/var/lib/apt/lists/*" \
-  && rm -rf /var/cache/apt/archives
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+    MIX_HOME=/root/.mix \
+    HEX_HOME=/root/.hex
 
-COPY --from=phoenix_base /usr/local /usr/local
+RUN apt-get update && apt-get upgrade -y \
+  && apt-get install -y --no-install-recommends \
+       git nodejs npm inotify-tools sqlite3 curl \
+       libodbc2 libssl3 libsctp1 \
+  && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
+# Copy Erlang + Elixir + hex/rebar from the toolchain stage
+COPY --from=toolchain /usr/local /usr/local
+COPY --from=toolchain /root/.mix /root/.mix
+COPY --from=toolchain /root/.hex /root/.hex
+
+# Sanity check
 RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   && elixir -v \
-  && which mix
+  && mix hex.info
 
-WORKDIR /app
+# Install the Phoenix project generator (phx_new)
+RUN mix archive.install hex phx_new --force ${PHX_NEW_VERSION} \
+  && mix phx.new --version
 
-# Create a new Elixir bootstrap example project (mix new)
-# https://elixir-lang.org/getting-started/mix-otp/introduction-to-mix.html
-RUN mix new hello --module Hello \
-  && cd hello \
-  # Replace the default greet function with a small bootstrap example
-  && echo 'defmodule Hello do\n  @moduledoc """\n  A minimal Elixir bootstrap example.\n  """\n\n  @doc """\n  Greets the given name (defaults to "world").\n  """\n  def hello(name \\\\ "world") do\n    "Hello, #{name}!"\n  end\n\n  def main(args \\\\ []) do\n    name = List.first(args) || "world"\n    IO.puts(hello(name))\n    IO.puts("Elixir #{System.version()}, Erlang/OTP #{:erlang.system_info(:otp_release)}")\n  end\nend\n' > lib/hello.ex \
-  # Configure escript build in mix.exs
-  && sed -i 's%def project do%def project do%' mix.exs \
-  && sed -i 's%deps: deps()%deps: deps(),\n      escript: [main_module: Hello]%' mix.exs \
-  # Compile and build an escript binary
-  && mix deps.get \
-  && mix compile \
-  && mix escript.build \
-  # Run the tests that ship with `mix new`
-  && mix test \
-  # Smoke test the escript
-  && ./hello \
-  && ./hello Elixir
+# Generate a new Phoenix app (see https://hexdocs.pm/phoenix/up_and_running.html)
+WORKDIR /srv
+RUN mix phx.new ${APP_NAME} \
+        --module ${APP_MODULE} \
+        --app ${APP_NAME} \
+        --database sqlite3 \
+        --no-dashboard \
+        --install
 
-WORKDIR /app/hello
+WORKDIR /srv/${APP_NAME}
 
-CMD ["./hello"]
+# Make the server listen on all interfaces inside the container
+RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
+  && sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs
+
+# Add a simple "Hello, :name" route + controller + template
+# (cheat sheet: https://devhints.io/phoenix)
+RUN sed -i "s%get \"/\"%get \"/\", HelloController, :world, assigns: \%{name: \"World\"}\n    get \"/hello/\", HelloController, :world, assigns: \%{name: \"World\"}\n    get \"/hello/:name\", HelloController, :world\n    #get \"\/\"%g" lib/${APP_NAME}_web/router.ex \
+  && printf '%s\n' \
+       "defmodule ${APP_MODULE}Web.HelloController do" \
+       "  use ${APP_MODULE}Web, :controller" \
+       "" \
+       "  def world(conn, params) do" \
+       "    name = params[\"name\"] || conn.assigns[:name]" \
+       "    render(conn, \"world.html\", name: name)" \
+       "  end" \
+       "end" \
+       > lib/${APP_NAME}_web/controllers/hello_controller.ex \
+  && printf '%s\n' \
+       "defmodule ${APP_MODULE}Web.HelloHTML do" \
+       "  use ${APP_MODULE}Web, :html" \
+       "" \
+       "  embed_templates \"hello_html/*\"" \
+       "end" \
+       > lib/${APP_NAME}_web/controllers/hello_html.ex \
+  && mkdir -p lib/${APP_NAME}_web/controllers/hello_html \
+  && printf '%s\n' \
+       "<h1>Hello <%= @name %>!</h1>" \
+       "<!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> -->" \
+       > lib/${APP_NAME}_web/controllers/hello_html/world.html.heex \
+  && mix ecto.migrate \
+  && mix phx.routes \
+  && mix phx.digest
+
+EXPOSE 4000
+
+# Run in prod-ish mode with a freshly generated secret
+CMD MIX_ENV=prod DATABASE_PATH=/tmp/${APP_NAME}_prod.db SECRET_KEY_BASE=$(mix phx.gen.secret) mix phx.server
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS "http://localhost:4000/" || exit 1
