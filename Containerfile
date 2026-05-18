@@ -66,7 +66,14 @@ RUN apt update && apt upgrade -y \
   && rm -rf "/var/lib/apt/lists/*" \
   && rm -rf /var/cache/apt/archives
 
-COPY --from=phoenix_base /usr/local /usr/local
+COPY --from=phoenix_base --chown=$USER:$USER /usr/local /usr/local
+
+# add user and set home directory
+ARG USER=phoenix
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR /phoenix
+USER $USER
 
 RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   && elixir -v \
@@ -85,7 +92,7 @@ RUN mix phx.new --version \
   && mix assets.setup \
   && mix deps.compile
 
-WORKDIR /hello_app
+WORKDIR /phoenix/hello_app
 
 RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
   && sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs
@@ -103,6 +110,6 @@ RUN mix phx.routes \
 
 EXPOSE 4000
 
-CMD MIX_ENV=prod DATABASE_PATH=/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
+CMD MIX_ENV=prod DATABASE_PATH=/phoenix/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
 
 HEALTHCHECK CMD curl -f "http://localhost:4000/" || exit 1
