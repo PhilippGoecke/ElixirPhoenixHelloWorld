@@ -1,0 +1,202 @@
+FROM debian:trixie-slim as phoenix_base
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+
+RUN apt update && apt upgrade -y \
+  # install tools
+  && apt install -y --no-install-recommends unzip curl ca-certificates git \
+  # install erlang runtime dependencies
+  && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
+  # install erlang build dependencies
+  && apt install -y --no-install-recommends autoconf dpkg-dev gcc g++ make libncurses-dev unixodbc-dev libssl-dev libsctp-dev \
+  # install erlang
+  && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/releases/download/OTP-28.5/otp_src_28.5.tar.gz" \
+  && echo "2c7e8ca23e6864eb20eff5d44738bfa123aed8cd21ed6d98e533d751eee28d9c otp-src.tar.gz" | sha256sum --strict --check - \
+  && export ERL_SRC="/usr/src/otp_src" \
+  && mkdir -vp $ERL_SRC \
+  && tar -xzf otp-src.tar.gz -C $ERL_SRC --strip-components=1 \
+  && rm otp-src.tar.gz \
+  && ( cd $ERL_SRC \
+    && ./otp_build autoconf \
+    && gnuArch="$(dpkg-architecture --query DEB_HOST_GNU_TYPE)" \
+    && ./configure --build="$gnuArch" \
+    && make -j$(nproc) \
+    && make install ) \
+  && find /usr/local -name examples | xargs rm -rf \
+  && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
+  # install elixir
+  && curl --output elixir.zip --location https://github.com/elixir-lang/elixir/releases/download/v1.19.5/elixir-otp-28.zip \
+  && echo "ca481510feb6dabc875bba43e44b25c7abafa53bd7a103639851b7aeace8a022 elixir.zip" | sha256sum --strict --check - \
+  && unzip elixir.zip -d /usr/local \
+  && rm elixir.zip \
+  && elixir -v \
+  # Elixir build tool
+  && which mix \
+  # install hex & rebar
+  && mix local.hex --force \
+  && mix local.rebar --force \
+  && mix hex.info \
+  # make image smaller
+  && apt purge -y --auto-remove curl unzip \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+FROM debian:trixie-slim as phoenix_runtime
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+
+RUN apt update && apt upgrade -y \
+  # install tools
+  && apt install -y --no-install-recommends git \
+  # install node.js/npm
+  && apt install -y --no-install-recommends nodejs npm \
+  # install phoenix dependencies
+  && apt install -y --no-install-recommends inotify-tools \
+  # install db
+  && apt install -y --no-install-recommends sqlite3 \
+  # install erlang runtime dependencies
+  && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
+  # install healthcheck dependencies
+  && apt install -y --no-install-recommends curl \
+  # make image smaller
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+COPY --from=phoenix_base /usr/local /usr/local
+
+RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
+  && elixir -v \
+  && which mix
+
+# install phoenix 1.8.7
+RUN mix archive.install hex phx_new --force 1.8.7 \
+  && mix phx.new --version
+
+# https://hexdocs.pm/phoenix/up_and_running.html
+RUN mix phx.new --version \
+  && mix phx.new hello_app --module Greeting --app helloworld --database sqlite3 --no-dashboard \
+  && cd hello_app \
+  && export SECRET_KEY_BASE=$(mix phx.gen.secret) \
+  && mix deps.get \
+  && mix assets.setup \
+  && mix deps.compile
+
+WORKDIR /hello_app
+
+RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
+  && sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs
+
+# https://devhints.io/phoenix
+RUN mix phx.routes \
+  && sed -i "s%get \"/\"%get \"/\", HelloController, :world, assigns: \%{name: \"World\"}\n    get \"/hello/\", HelloController, :world, assigns: \%{name: \"World\"}\n    get \"/hello/:name\", HelloController, :world\n    #get \"\/\"%g" lib/helloworld_web/router.ex \
+  && echo "defmodule GreetingWeb.HelloController do\n use GreetingWeb, :controller\n\n def world(conn, params) do\n name = params[\"name\"] || conn.assigns[:name]\n render(conn, \"world.html\", name: name)\n end\nend\n" > lib/helloworld_web/controllers/hello_controller.ex \
+  && echo "defmodule GreetingWeb.HelloHTML do\n\n use GreetingWeb, :html\n\n embed_templates \"hello_html/*\"\nend" > lib/helloworld_web/controllers/hello_html.ex \
+  && mkdir -p lib/helloworld_web/controllers/hello_html \
+  && echo "<h1>Hello <%= @name %>!</h1>\n <!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> -->" > lib/helloworld_web/controllers/hello_html/world.html.heex \
+  && mix ecto.migrate \
+  && mix phx.routes
+
+# --- Bootstrap 5 setup (replaces Tailwind) ---
+
+# Install yarn for installing bootstrap and popperjs
+RUN npm install -g yarn
+
+# 1) Add dart_sass dependency to mix.exs and update assets.deploy alias
+RUN sed -i 's|{:tailwind,.*$|{:dart_sass, "~> 0.7", runtime: Mix.env() == :dev},|' mix.exs \
+  && sed -i 's|"tailwind helloworld --minify",|"sass default --no-source-map --style=compressed",|' mix.exs \
+  && sed -i '/"tailwind\.install --if-missing",/d' mix.exs \
+  && grep -q "sass.install" mix.exs || sed -i 's|"assets.setup": \[|"assets.setup": ["sass.install --if-missing", |' mix.exs \
+  && cat mix.exs
+
+# 2) Replace tailwind config with dart_sass config in config/config.exs
+RUN sed -i '/config :tailwind,/,/^$/d' config/config.exs \
+  && printf '\nconfig :dart_sass,\n  version: "1.54.5",\n  default: [\n    args: ~w(css/app.scss ../priv/static/assets/app.css),\n    cd: Path.expand("../assets", __DIR__)\n  ]\n' >> config/config.exs
+
+# 3) Replace tailwind watcher with sass watcher in config/dev.exs
+RUN sed -i 's|tailwind: {Tailwind, :install_and_run, \[:helloworld, ~w(--watch)\]}|sass: {DartSass, :install_and_run, [:default, ~w(--embed-source-map --source-map-urls=absolute --watch)]}|' config/dev.exs
+
+# 4) Rename app.css to app.scss and add bootstrap import
+RUN mv assets/css/app.css assets/css/app.scss \
+  && sed -i '/@import "phoenix"/d' assets/css/app.scss \
+  && sed -i '/@import "tailwindcss"/d' assets/css/app.scss \
+  && sed -i '1i @import "../node_modules/bootstrap/scss/bootstrap";' assets/css/app.scss
+
+# 5) Update app.js: import bootstrap, comment out css import
+RUN sed -i 's|^import "../css/app.css"|// import "../css/app.css"|' assets/js/app.js \
+  && echo 'import "bootstrap"' >> assets/js/app.js
+
+# 6) Install bootstrap & popperjs via yarn
+RUN cd assets \
+  && yarn init -y \
+  && yarn add -D @popperjs/core bootstrap
+
+# 7) Install dart_sass deps and binaries
+RUN mix deps.get \
+  && mix deps.compile \
+  && mix sass.install
+
+# 8) Update root.html.heex with a classic Bootstrap navbar layout
+RUN cat > lib/helloworld_web/components/layouts/root.html.heex <<'EOF'
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <.live_title default="Helloworld" suffix=" · Phoenix Framework">
+      {assigns[:page_title]}
+    </.live_title>
+    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
+    </script>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">Navbar</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+          <ul class="navbar-nav me-auto mb-2 mb-md-0">
+            <li class="nav-item">
+              <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">Disabled</a>
+            </li>
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" id="dropdown01" data-bs-toggle="dropdown" aria-expanded="false">Dropdown</a>
+              <ul class="dropdown-menu" aria-labelledby="dropdown01">
+                <li><a class="dropdown-item" href="#">Action</a></li>
+                <li><a class="dropdown-item" href="#">Another action</a></li>
+                <li><a class="dropdown-item" href="#">Something else here</a></li>
+              </ul>
+            </li>
+          </ul>
+          <form class="d-flex">
+            <input class="form-control me-2" type="search" placeholder="Search" aria-label="Search">
+            <button class="btn btn-outline-success" type="submit">Search</button>
+          </form>
+        </div>
+      </div>
+    </nav>
+
+    <main class="container" style="margin-top: 80px;">
+      {@inner_content}
+    </main>
+  </body>
+</html>
+EOF
+
+# 9) Build assets
+RUN mix assets.build \
+  && mix phx.digest
+
+EXPOSE 4000
+
+CMD MIX_ENV=prod DATABASE_PATH=/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
+
+HEALTHCHECK CMD curl -f "http://localhost:4000/" || exit 1
