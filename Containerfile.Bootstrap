@@ -135,6 +135,10 @@ RUN cd assets \
   && yarn init -y \
   && yarn add -D @popperjs/core bootstrap
 
+# 6b) Configure esbuild to resolve assets/node_modules so `import "bootstrap"` bundles Popper too
+RUN sed -i 's|config :esbuild,|config :esbuild,\n  version: "0.25.0",|' config/config.exs 2>/dev/null; \
+    sed -i 's|env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}|env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Path.expand("../assets/node_modules", __DIR__)]}|' config/config.exs
+
 # 7) Install dart_sass deps and binaries
 RUN mix deps.get \
   && mix deps.compile \
