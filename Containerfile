@@ -66,7 +66,7 @@ RUN apt update && apt upgrade -y \
   && rm -rf "/var/lib/apt/lists/*" \
   && rm -rf /var/cache/apt/archives
 
-COPY --from=phoenix_base --chown=$USER:$USER /usr/local /usr/local
+COPY --from=phoenix_base /usr/local /usr/local
 
 # add user and set home directory
 ARG USER=phoenix
