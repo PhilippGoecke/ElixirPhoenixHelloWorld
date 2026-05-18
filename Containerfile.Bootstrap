@@ -105,10 +105,11 @@ RUN mix phx.routes \
 # Install yarn for installing bootstrap and popperjs
 RUN npm install -g yarn
 
-# 1) Add dart_sass dependency to mix.exs and update assets.deploy alias
+# 1) Add dart_sass dependency to mix.exs and update assets aliases
 RUN sed -i 's|{:tailwind,.*$|{:dart_sass, "~> 0.7", runtime: Mix.env() == :dev},|' mix.exs \
   && sed -i 's|"tailwind helloworld --minify",|"sass default --no-source-map --style=compressed",|' mix.exs \
-  && sed -i '/"tailwind\.install --if-missing",/d' mix.exs \
+  && sed -i 's|"tailwind helloworld"|"sass default"|g' mix.exs \
+  && sed -i '/"tailwind\.install --if-missing",\?/d' mix.exs \
   && grep -q "sass.install" mix.exs || sed -i 's|"assets.setup": \[|"assets.setup": ["sass.install --if-missing", |' mix.exs \
   && cat mix.exs
 
