@@ -124,7 +124,7 @@ RUN sed -i 's|{:tailwind,.*$|{:dart_sass, "~> 0.7", runtime: Mix.env() == :dev},
 
 # 2) Replace tailwind config with dart_sass config in config/config.exs
 RUN sed -i '/config :tailwind,/,/^$/d' config/config.exs \
-  && printf '\nconfig :dart_sass,\n  version: "1.77.8",\n  default: [\n    args: ~w(css/app.scss ../priv/static/assets/app.css),\n    cd: Path.expand("../assets", __DIR__)\n  ]\n' >> config/config.exs
+  && printf '\nconfig :dart_sass,\n  version: "1.99.0",\n  default: [\n    args: ~w(css/app.scss ../priv/static/assets/app.css),\n    cd: Path.expand("../assets", __DIR__)\n  ]\n' >> config/config.exs
 
 # 3) Replace tailwind watcher with sass watcher in config/dev.exs
 RUN sed -i 's|tailwind: {Tailwind, :install_and_run, \[:helloworld, ~w(--watch)\]}|sass: {DartSass, :install_and_run, [:default, ~w(--embed-source-map --source-map-urls=absolute --watch)]}|' config/dev.exs
@@ -145,8 +145,8 @@ RUN cd assets \
   && yarn add -D @popperjs/core bootstrap
 
 # 6b) Configure esbuild to resolve assets/node_modules so `import "bootstrap"` bundles Popper too
-RUN sed -i 's|config :esbuild,|config :esbuild,\n  version: "0.25.0",|' config/config.exs 2>/dev/null; \
-    sed -i 's|env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}|env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Path.expand("../assets/node_modules", __DIR__)]}|' config/config.exs
+#RUN sed -i 's|config :esbuild,|config :esbuild,\n  version: "0.28.0",|' config/config.exs 2>/dev/null; \
+RUN sed -i 's|env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}|env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Path.expand("../assets/node_modules", __DIR__)]}|' config/config.exs
 
 # 7) Install dart_sass deps and binaries
 RUN mix deps.get \
