@@ -68,6 +68,13 @@ RUN apt update && apt upgrade -y \
 
 COPY --from=phoenix_base /usr/local /usr/local
 
+# add user and set home directory
+ARG USER=phoenix
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR /phoenix
+USER $USER
+
 RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   && elixir -v \
   && which mix
@@ -85,7 +92,7 @@ RUN mix phx.new --version \
   && mix assets.setup \
   && mix deps.compile
 
-WORKDIR /hello_app
+WORKDIR /phoenix/hello_app
 
 RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
   && sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs
@@ -111,6 +118,8 @@ RUN sed -i 's|{:tailwind,.*$|{:dart_sass, "~> 0.7", runtime: Mix.env() == :dev},
   && sed -i 's|"tailwind helloworld"|"sass default"|g' mix.exs \
   && sed -i '/"tailwind\.install --if-missing",\?/d' mix.exs \
   && grep -q "sass.install" mix.exs || sed -i 's|"assets.setup": \[|"assets.setup": ["sass.install --if-missing", |' mix.exs \
+  && grep -q "esbuild helloworld" mix.exs || sed -i 's|"sass default --no-source-map --style=compressed",|"sass default --no-source-map --style=compressed", "esbuild helloworld --minify",|' mix.exs \
+  && grep -q '"sass default"$\|"sass default",' mix.exs && sed -i 's|"sass default"\([],]\)|"sass default", "esbuild helloworld"\1|' mix.exs \
   && cat mix.exs
 
 # 2) Replace tailwind config with dart_sass config in config/config.exs
@@ -202,6 +211,6 @@ RUN mix assets.build \
 
 EXPOSE 4000
 
-CMD MIX_ENV=prod DATABASE_PATH=/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
+CMD MIX_ENV=prod DATABASE_PATH=/phoenix/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
 
 HEALTHCHECK CMD curl -f "http://localhost:4000/" || exit 1
