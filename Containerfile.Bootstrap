@@ -139,8 +139,9 @@ RUN mv assets/css/app.css assets/css/app.scss \
   && sed -i '/@import "tailwindcss"/d' assets/css/app.scss \
   && sed -i '1i @import "../node_modules/bootstrap/scss/bootstrap";' assets/css/app.scss
 
-# 5) Update app.js: import bootstrap, comment out css import
+# 5) Update app.js: import bootstrap, comment out css import, remove phoenix-colocated dynamic require
 RUN sed -i 's|^import "../css/app.css"|// import "../css/app.css"|' assets/js/app.js \
+  && sed -i '/phoenix-colocated/d' assets/js/app.js \
   && echo 'import "bootstrap"' >> assets/js/app.js
 
 # 6) Install bootstrap & popperjs via yarn
