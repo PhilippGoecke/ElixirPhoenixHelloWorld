@@ -75,6 +75,10 @@ ARG HOME="/home/$USER"
 WORKDIR /phoenix
 USER $USER
 
+RUN mkdir "$HOME/.npm-global" \
+  && npm config set prefix "$HOME/.npm-global"
+ENV PATH=$HOME/.npm-global/bin:$PATH
+
 RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   && elixir -v \
   && which mix
