@@ -209,6 +209,9 @@ RUN cat > lib/helloworld_web/components/layouts/root.html.heex <<'EOF'
 </html>
 EOF
 
+# 8b) Mark phoenix-colocated as external in esbuild config
+RUN sed -i 's|--target=es2022 --outdir=../priv/static/assets/js|--target=es2022 --outdir=../priv/static/assets/js --external:phoenix-colocated/*|' config/config.exs
+
 # 9) Build assets
 RUN mix assets.build \
   && mix phx.digest \
