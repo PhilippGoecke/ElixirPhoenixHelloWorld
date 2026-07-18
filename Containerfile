@@ -97,8 +97,7 @@ WORKDIR /phoenix/hello_app
 RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
   && sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs \
   # disable forcing HTTPS redirects in production
-  && sed -i 's/force_ssl:.*$/force_ssl: false,/' config/prod.exs config/runtime.exs || true \
-  && sed -i '/force_ssl/d' config/prod.exs config/runtime.exs
+  && sed -i 's/force_ssl:.*$/force_ssl: false/' config/prod.exs config/runtime.exs || true
 
 # https://devhints.io/phoenix
 RUN mix phx.routes \
