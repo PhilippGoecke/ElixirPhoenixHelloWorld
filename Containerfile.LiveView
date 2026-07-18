@@ -125,6 +125,64 @@ RUN mix phx.gen.live Tasks Task tasks title:string description:text priority:int
   && mix compile \
   && mix phx.routes
 
+# make /tasks look pretty: styled card-based index page with badges and layout polish
+RUN cat > lib/helloworld_web/live/task_live/index.html.heex <<'HEEX'
+<Layouts.app flash={@flash}>
+  <div class="mx-auto max-w-3xl px-4 py-10">
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Task Manager</h1>
+        <p class="text-sm opacity-60 mt-1">Stay on top of your work</p>
+      </div>
+      <.link navigate={~p"/tasks/new"} class="btn btn-primary shadow-md">
+        + New Task
+      </.link>
+    </div>
+
+    <div id="tasks" phx-update="stream" class="space-y-4">
+      <div
+        :for={{id, task} <- @streams.tasks}
+        id={id}
+        class="card bg-base-100 shadow-md hover:shadow-xl transition-shadow border border-base-200 rounded-2xl"
+      >
+        <div class="card-body p-5 flex-row items-start gap-4">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <.link navigate={~p"/tasks/#{task}"} class="text-lg font-semibold hover:underline">
+                {task.title}
+              </.link>
+              <span :if={task.done} class="badge badge-success badge-sm">Done</span>
+              <span :if={!task.done} class="badge badge-warning badge-sm">Open</span>
+              <span class={[
+                "badge badge-sm badge-outline",
+                task.priority == 1 && "badge-error",
+                task.priority == 2 && "badge-warning",
+                task.priority not in [1, 2] && "badge-info"
+              ]}>
+                Priority {task.priority}
+              </span>
+            </div>
+            <p class="text-sm opacity-70 mt-1">{task.description}</p>
+            <p :if={task.due_date} class="text-xs opacity-50 mt-2">Due {task.due_date}</p>
+          </div>
+          <div class="flex gap-2">
+            <.link navigate={~p"/tasks/#{task}/edit"} class="btn btn-sm btn-ghost">Edit</.link>
+            <.link
+              phx-click={JS.push("delete", value: %{id: task.id}) |> hide("##{id}")}
+              data-confirm="Are you sure?"
+              class="btn btn-sm btn-ghost text-error"
+            >
+              Delete
+            </.link>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layouts.app>
+HEEX
+RUN mix compile
+
 # generate self-signed certificate and enable SSL/HTTPS
 RUN mkdir -p priv/cert \
   && mix phx.gen.cert selfsigned --output priv/cert/selfsigned --name localhost \
