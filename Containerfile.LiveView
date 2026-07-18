@@ -79,8 +79,8 @@ RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshel
   && elixir -v \
   && which mix
 
-# install phoenix 1.8.7
-RUN mix archive.install hex phx_new --force 1.8.7 \
+# install phoenix 1.8.9
+RUN mix archive.install hex phx_new --force 1.8.9 \
   && mix phx.new --version
 
 # https://hexdocs.pm/phoenix/up_and_running.html
