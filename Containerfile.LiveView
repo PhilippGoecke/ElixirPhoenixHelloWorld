@@ -122,11 +122,18 @@ RUN mix phx.gen.live Tasks Task tasks title:string description:text priority:int
   && mix compile \
   && mix phx.routes
 
-EXPOSE 4000
+# generate self-signed certificate and enable SSL/HTTPS
+RUN mkdir -p priv/cert \
+  && mix phx.gen.cert selfsigned --output priv/cert/selfsigned --name localhost \
+  && printf '\nconfig :helloworld, GreetingWeb.Endpoint,\n  https: [\n    ip: {0, 0, 0, 0},\n    port: 4001,\n    cipher_suite: :strong,\n    certfile: "priv/cert/selfsigned.pem",\n    keyfile: "priv/cert/selfsigned_key.pem"\n  ]\n' >> config/dev.exs \
+  && printf '\nconfig :helloworld, GreetingWeb.Endpoint,\n  https: [\n    ip: {0, 0, 0, 0},\n    port: 4001,\n    cipher_suite: :strong,\n    certfile: "priv/cert/selfsigned.pem",\n    keyfile: "priv/cert/selfsigned_key.pem"\n  ]\n' >> config/runtime.exs \
+  && mix compile
+
+EXPOSE 4000 4001
 
 CMD export MIX_ENV=prod PHX_HOST=localhost DATABASE_PATH=/phoenix/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` \
   && mix ecto.migrate \
   && mix run priv/repo/seeds.exs \
   && mix phx.server
 
-HEALTHCHECK CMD curl -f "http://localhost:4000/" || exit 1
+HEALTHCHECK CMD curl -f "http://localhost:4000/" && curl -fk "https://localhost:4001/" || exit 1
