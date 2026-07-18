@@ -110,6 +110,6 @@ RUN mix phx.routes \
 
 EXPOSE 4000
 
-CMD MIX_ENV=prod DATABASE_PATH=/phoenix/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
+CMD MIX_ENV=prod PHX_HOST=localhost DATABASE_PATH=/phoenix/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
 
 HEALTHCHECK CMD curl -f "http://localhost:4000/" || exit 1
