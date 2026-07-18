@@ -12,8 +12,8 @@ RUN apt update && apt upgrade -y \
   # install erlang build dependencies
   && apt install -y --no-install-recommends autoconf dpkg-dev gcc g++ make libncurses-dev unixodbc-dev libssl-dev libsctp-dev \
   # install erlang
-  && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/releases/download/OTP-29.0.3/otp_src_29.0.3.tar.gz" \
-  && echo "f920c660b16794bcb7270d1cbf680f7747c719650bcd6ac449508a32c2a8972a otp-src.tar.gz" | sha256sum --strict --check - \
+  && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/releases/download/OTP-28.5/otp_src_28.5.tar.gz" \
+  && echo "2c7e8ca23e6864eb20eff5d44738bfa123aed8cd21ed6d98e533d751eee28d9c otp-src.tar.gz" | sha256sum --strict --check - \
   && export ERL_SRC="/usr/src/otp_src" \
   && mkdir -vp $ERL_SRC \
   && tar -xzf otp-src.tar.gz -C $ERL_SRC --strip-components=1 \
@@ -27,8 +27,8 @@ RUN apt update && apt upgrade -y \
   && find /usr/local -name examples | xargs rm -rf \
   && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   # install elixir
-  && curl --output elixir.zip --location https://github.com/elixir-lang/elixir/releases/download/v1.20.2/elixir-otp-29.zip \
-  && echo "a9e88cd41fbbba7da6f6dc237a49dd2ed4e70457121035cc7fc56ad05582f394 elixir.zip" | sha256sum --strict --check - \
+  && curl --output elixir.zip --location https://github.com/elixir-lang/elixir/releases/download/v1.19.5/elixir-otp-28.zip \
+  && echo "ca481510feb6dabc875bba43e44b25c7abafa53bd7a103639851b7aeace8a022 elixir.zip" | sha256sum --strict --check - \
   && unzip elixir.zip -d /usr/local \
   && rm elixir.zip \
   && elixir -v \
@@ -97,7 +97,7 @@ WORKDIR /phoenix/hello_app
 RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
   && sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs \
   # disable forcing HTTPS redirects in production
-  && sed -i 's/force_ssl:.*$/force_ssl: false/' config/prod.exs config/runtime.exs || true
+  && { sed -i 's/force_ssl:.*/force_ssl: false/' config/prod.exs config/runtime.exs || true; }
 
 # https://devhints.io/phoenix
 RUN mix phx.routes \
