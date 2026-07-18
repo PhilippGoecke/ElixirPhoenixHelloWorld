@@ -112,7 +112,7 @@ RUN mix phx.routes \
 # Uses Ecto-backed CRUD (generated context + schema + migration), live search,
 # filtering, inline editing, form validation and PubSub-based live updates.
 RUN mix phx.gen.live Tasks Task tasks title:string description:text priority:integer done:boolean due_date:date --no-scope \
-  && sed -i "s%get \"/\", HelloController%live \"/tasks\", TaskLive.Index, :index\n    live \"/tasks/new\", TaskLive.Form, :new\n    live \"/tasks/:id\", TaskLive.Show, :show\n    live \"/tasks/:id/edit\", TaskLive.Form, :edit\n    get \"/\", HelloController%" lib/helloworld_web/router.ex \
+  && sed -i "s%get \"/\", HelloController%live \"/tasks\", TaskLive.Index, :index\n    live \"/tasks/new\", TaskLive.Form, :new\n    live \"/tasks/:id/edit\", TaskLive.Form, :edit\n    live \"/tasks/:id\", TaskLive.Show, :show\n    get \"/\", HelloController%" lib/helloworld_web/router.ex \
   && mix ecto.migrate \
   # broadcast changes so all connected clients see live updates
   && echo "defmodule Greeting.Tasks.Notifier do\n @topic \"tasks\"\n\n def subscribe do\n Phoenix.PubSub.subscribe(Greeting.PubSub, @topic)\n end\n\n def broadcast({:ok, task}, event) do\n Phoenix.PubSub.broadcast(Greeting.PubSub, @topic, {event, task})\n {:ok, task}\n end\n\n def broadcast({:error, _reason} = error, _event), do: error\nend\n" > lib/helloworld/tasks/notifier.ex \
