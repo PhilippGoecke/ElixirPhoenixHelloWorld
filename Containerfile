@@ -97,7 +97,9 @@ WORKDIR /phoenix/hello_app
 RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
   && sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs \
   # disable forcing HTTPS redirects in production
-  && { sed -i 's/force_ssl:.*/force_ssl: false/' config/prod.exs config/runtime.exs || true; }
+  # force_ssl in prod.exs is a multi-line keyword list: force_ssl: [\n ... ]
+  && { perl -0pi -e 's/force_ssl:\s*\[[^\]]*\]/force_ssl: false/gs' config/prod.exs || true; } \
+  && { sed -i 's/force_ssl:.*/force_ssl: false/' config/runtime.exs || true; }
 
 # https://devhints.io/phoenix
 RUN mix phx.routes \
