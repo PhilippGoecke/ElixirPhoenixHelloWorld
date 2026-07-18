@@ -108,6 +108,9 @@ RUN mix phx.routes \
   && mix phx.routes \
   && mix phx.digest
 
+# remove the phoenixframework header (logo/nav) from the root layout
+RUN sed -i '/<header/,/<\/header>/d' lib/helloworld_web/components/layouts/root.html.heex
+
 # LiveView example: a real-world task manager at /tasks
 # Uses Ecto-backed CRUD (generated context + schema + migration), live search,
 # filtering, inline editing, form validation and PubSub-based live updates.
