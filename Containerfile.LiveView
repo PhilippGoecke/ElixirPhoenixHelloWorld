@@ -124,7 +124,7 @@ RUN mix phx.gen.live Tasks Task tasks title:string description:text priority:int
 
 EXPOSE 4000
 
-CMD export MIX_ENV=prod DATABASE_PATH=/phoenix/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` \
+CMD export MIX_ENV=prod PHX_HOST=localhost DATABASE_PATH=/phoenix/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` \
   && mix ecto.migrate \
   && mix run priv/repo/seeds.exs \
   && mix phx.server
