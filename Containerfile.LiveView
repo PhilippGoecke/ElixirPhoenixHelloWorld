@@ -117,7 +117,7 @@ RUN mix phx.gen.live Tasks Task tasks title:string description:text priority:int
   # broadcast changes so all connected clients see live updates
   && echo "defmodule Greeting.Tasks.Notifier do\n @topic \"tasks\"\n\n def subscribe do\n Phoenix.PubSub.subscribe(Greeting.PubSub, @topic)\n end\n\n def broadcast({:ok, task}, event) do\n Phoenix.PubSub.broadcast(Greeting.PubSub, @topic, {event, task})\n {:ok, task}\n end\n\n def broadcast({:error, _reason} = error, _event), do: error\nend\n" > lib/helloworld/tasks/notifier.ex \
   # seed some example data
-  && echo "alias Greeting.{Repo, Tasks.Task}\nRepo.insert!(\%Task{title: \"Write project proposal\", description: \"Draft and share with the team\", priority: 1, done: false, due_date: ~D[2025-12-01]})\nRepo.insert!(\%Task{title: \"Review pull requests\", description: \"Clear the review queue\", priority: 2, done: false, due_date: ~D[2025-11-15]})\nRepo.insert!(\%Task{title: \"Update dependencies\", description: \"Run mix hex.outdated and upgrade\", priority: 3, done: true, due_date: ~D[2025-10-30]})\n" > priv/repo/seeds.exs \
+  && echo "alias Greeting.{Repo, Tasks.Task}\nRepo.insert!(%Task{title: \"Write project proposal\", description: \"Draft and share with the team\", priority: 1, done: false, due_date: ~D[2025-12-01]})\nRepo.insert!(%Task{title: \"Review pull requests\", description: \"Clear the review queue\", priority: 2, done: false, due_date: ~D[2025-11-15]})\nRepo.insert!(%Task{title: \"Update dependencies\", description: \"Run mix hex.outdated and upgrade\", priority: 3, done: true, due_date: ~D[2025-10-30]})\n" > priv/repo/seeds.exs \
   && mix run priv/repo/seeds.exs \
   && mix compile \
   && mix phx.routes
