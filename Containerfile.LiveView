@@ -108,9 +108,17 @@ RUN mix phx.routes \
   && mix phx.routes \
   && mix phx.digest
 
-# LiveView example: a simple counter at /counter
-RUN echo "defmodule GreetingWeb.CounterLive do\n use GreetingWeb, :live_view\n\n def mount(_params, _session, socket) do\n {:ok, assign(socket, count: 0)}\n end\n\n def handle_event(\"increment\", _params, socket) do\n {:noreply, update(socket, :count, &(&1 + 1))}\n end\n\n def handle_event(\"decrement\", _params, socket) do\n {:noreply, update(socket, :count, &(&1 - 1))}\n end\n\n def render(assigns) do\n ~H\"\"\"\n <h1>Counter: <%= @count %></h1>\n <button phx-click=\"increment\">+</button>\n <button phx-click=\"decrement\">-</button>\n \"\"\"\n end\nend\n" > lib/helloworld_web/live/counter_live.ex \
-  && sed -i "s%get \"/\", HelloController%live \"/counter\", CounterLive\n    get \"/\", HelloController%" lib/helloworld_web/router.ex \
+# LiveView example: a real-world task manager at /tasks
+# Uses Ecto-backed CRUD (generated context + schema + migration), live search,
+# filtering, inline editing, form validation and PubSub-based live updates.
+RUN mix phx.gen.live Tasks Task tasks title:string description:text priority:integer done:boolean due_date:date --no-scope \
+  && sed -i "s%get \"/\", HelloController%live \"/tasks\", TaskLive.Index, :index\n    live \"/tasks/new\", TaskLive.Index, :new\n    live \"/tasks/:id/edit\", TaskLive.Index, :edit\n    live \"/tasks/:id\", TaskLive.Show, :show\n    live \"/tasks/:id/show/edit\", TaskLive.Show, :edit\n    get \"/\", HelloController%" lib/helloworld_web/router.ex \
+  && mix ecto.migrate \
+  # broadcast changes so all connected clients see live updates
+  && echo "defmodule Greeting.Tasks.Notifier do\n @topic \"tasks\"\n\n def subscribe do\n Phoenix.PubSub.subscribe(Greeting.PubSub, @topic)\n end\n\n def broadcast({:ok, task}, event) do\n Phoenix.PubSub.broadcast(Greeting.PubSub, @topic, {event, task})\n {:ok, task}\n end\n\n def broadcast({:error, _reason} = error, _event), do: error\nend\n" > lib/helloworld/tasks/notifier.ex \
+  # seed some example data
+  && echo "alias Greeting.{Repo, Tasks.Task}\nRepo.insert!(\%Task{title: \"Write project proposal\", description: \"Draft and share with the team\", priority: 1, done: false, due_date: ~D[2025-12-01]})\nRepo.insert!(\%Task{title: \"Review pull requests\", description: \"Clear the review queue\", priority: 2, done: false, due_date: ~D[2025-11-15]})\nRepo.insert!(\%Task{title: \"Update dependencies\", description: \"Run mix hex.outdated and upgrade\", priority: 3, done: true, due_date: ~D[2025-10-30]})\n" > priv/repo/seeds.exs \
+  && mix run priv/repo/seeds.exs \
   && mix compile \
   && mix phx.routes
 
