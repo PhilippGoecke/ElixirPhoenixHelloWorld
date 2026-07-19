@@ -1,0 +1,108 @@
+FROM debian:trixie-slim AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    build-essential \
+    unzip \
+    openssl \
+    inotify-tools \
+    erlang \
+    elixir \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Mix vorbereiten
+RUN mix local.hex --force && \
+    mix local.rebar --force
+
+# Dependencies zuerst kopieren
+COPY mix.exs mix.lock ./
+COPY config config
+
+RUN mix deps.get --only prod
+RUN mix deps.compile
+
+# Assets
+COPY assets assets
+RUN cd assets && npm install
+
+# Rest kopieren
+COPY . .
+
+ENV MIX_ENV=prod
+
+RUN mix assets.deploy
+
+RUN mix compile
+
+RUN mix release
+
+FROM debian:trixie-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    openssl \
+    libstdc++6 \
+    libncurses6 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /app/_build/prod/rel/ ./
+
+EXPOSE 4005
+
+ENV MIX_ENV=prod
+ENV PHX_SERVER=true
+ENV PORT=4005
+
+# SSL
+ENV SSL_CERT_PATH=/app/certs/cert.pem
+ENV SSL_KEY_PATH=/app/certs/key.pem
+
+VOLUME ["/app/certs"]
+
+CMD ["bin/your_app", "start"]
+runtime.exs
+Die Anwendung sollte HTTPS aktivieren:
+import Config
+
+port =
+  String.to_integer(System.get_env("PORT", "4005"))
+
+config :your_app, YourAppWeb.Endpoint,
+  server: true,
+  https: [
+    port: port,
+    cipher_suite: :strong,
+    certfile: System.get_env("SSL_CERT_PATH"),
+    keyfile: System.get_env("SSL_KEY_PATH")
+  ],
+  check_origin: false
+Zertifikat erzeugen
+mkdir certs
+
+openssl req \
+  -x509 \
+  -newkey rsa:4096 \
+  -sha256 \
+  -days 365 \
+  -nodes \
+  -keyout certs/key.pem \
+  -out certs/cert.pem \
+  -subj "/CN=localhost"
+Build
+docker build -t liveview-showcase .
+Start
+docker run \
+    -p 4005:4005 \
+    -v $(pwd)/certs:/app/certs \
+    liveview-showcase
