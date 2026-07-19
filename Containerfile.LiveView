@@ -137,6 +137,15 @@ RUN mix phx.gen.live Tasks Task tasks title:string description:text priority:int
   && mix compile \
   && mix phx.routes
 
+# build static assets (js/css) so /assets/js/app.js and /assets/css/app.css are served
+RUN mix assets.setup \
+  && mix assets.build \
+  && mix phx.digest \
+  && export MIX_ENV=prod \
+  && mix deps.get --only prod \
+  && mix assets.setup \
+  && mix assets.deploy
+
 # generate self-signed certificate and enable SSL/HTTPS
 RUN mkdir -p priv/cert \
   && mix phx.gen.cert selfsigned --output priv/cert/selfsigned --name localhost \
@@ -148,6 +157,7 @@ EXPOSE 4003 4004
 
 CMD export MIX_ENV=prod PHX_HOST=localhost DATABASE_PATH=/phoenix/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` \
   && mix deps.compile \
+  && mix assets.setup \
   && mix assets.deploy \
   && mix ecto.migrate \
   && mix run priv/repo/seeds.exs \
