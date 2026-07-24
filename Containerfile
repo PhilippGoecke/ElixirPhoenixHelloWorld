@@ -108,6 +108,7 @@ RUN mix phx.routes \
   && mkdir -p lib/helloworld_web/controllers/hello_html \
   && echo "<h1>Hello <%= @name %>!</h1>\n <!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> (<%= File.read!(Path.join([:code.root_dir(), \"releases\", :erlang.system_info(:otp_release), \"OTP_VERSION\"])) |> String.trim() %>) -->" > lib/helloworld_web/controllers/hello_html/world.html.heex \
   && sed -i 's/ suffix=" · Phoenix Framework"//' lib/helloworld_web/components/layouts/root.html.heex \
+  && sed -i '/<header/,/<\/header>/d' lib/helloworld_web/components/layouts.ex \
   && mix ecto.migrate \
   && mix phx.routes \
   && mix phx.digest
