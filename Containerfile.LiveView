@@ -317,11 +317,11 @@ RUN printf '\nalias Helloworld.{Repo, Task}\n\nRepo.insert!(%%Task{title: "Test 
 # generate self-signed certificate and enable SSL/HTTPS
 RUN mkdir -p priv/cert \
   && mix phx.gen.cert selfsigned --output priv/cert/selfsigned --name localhost \
-  && printf '\nconfig :helloworld, GreetingWeb.Endpoint,\n  check_origin: false,\n  http: [\n    ip: {0, 0, 0, 0},\n    port: 4003\n  ],\n  https: [\n    ip: {0, 0, 0, 0},\n    port: 4004,\n    cipher_suite: :strong,\n    certfile: "priv/cert/selfsigned.pem",\n    keyfile: "priv/cert/selfsigned_key.pem"\n  ]\n' >> config/dev.exs \
-  && printf '\nconfig :helloworld, GreetingWeb.Endpoint,\n  check_origin: false,\n  http: [\n    ip: {0, 0, 0, 0},\n    port: 4003\n  ],\n  https: [\n    ip: {0, 0, 0, 0},\n    port: 4004,\n    cipher_suite: :strong,\n    certfile: "priv/cert/selfsigned.pem",\n    keyfile: "priv/cert/selfsigned_key.pem"\n  ]\n' >> config/runtime.exs \
+  && printf '\nconfig :helloworld, GreetingWeb.Endpoint,\n  check_origin: false,\n  http: false,\n  https: [\n    ip: {0, 0, 0, 0},\n    port: 4004,\n    cipher_suite: :strong,\n    certfile: "priv/cert/selfsigned.pem",\n    keyfile: "priv/cert/selfsigned_key.pem"\n  ]\n' >> config/dev.exs \
+  && printf '\nconfig :helloworld, GreetingWeb.Endpoint,\n  check_origin: false,\n  http: false,\n  https: [\n    ip: {0, 0, 0, 0},\n    port: 4004,\n    cipher_suite: :strong,\n    certfile: "priv/cert/selfsigned.pem",\n    keyfile: "priv/cert/selfsigned_key.pem"\n  ]\n' >> config/runtime.exs \
   && mix compile
 
-EXPOSE 4003 4004
+EXPOSE 4004
 
 CMD export MIX_ENV=prod PHX_HOST=localhost DATABASE_PATH=/phoenix/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` \
   && mix deps.compile \
@@ -332,4 +332,4 @@ CMD export MIX_ENV=prod PHX_HOST=localhost DATABASE_PATH=/phoenix/my_app_prod.db
   && mix run priv/repo/seeds.exs \
   && mix phx.server
 
-HEALTHCHECK CMD curl -f "http://localhost:4003/" && curl -fk "https://localhost:4004/" || exit 1
+HEALTHCHECK CMD curl -fk "https://localhost:4004/" || exit 1
