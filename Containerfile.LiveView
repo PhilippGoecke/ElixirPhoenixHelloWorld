@@ -107,53 +107,215 @@ RUN mix phx.routes \
   && echo "defmodule GreetingWeb.HelloHTML do\n\n use GreetingWeb, :html\n\n embed_templates \"hello_html/*\"\nend" > lib/helloworld_web/controllers/hello_html.ex \
   && mkdir -p lib/helloworld_web/controllers/hello_html \
   && echo "<h1>Hello <%= @name %>!</h1>\n <!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> (<%= File.read!(Path.join([:code.root_dir(), \"releases\", :erlang.system_info(:otp_release), \"OTP_VERSION\"])) |> String.trim() %>) -->" > lib/helloworld_web/controllers/hello_html/world.html.heex \
+  && sed -i 's/ suffix=" · Phoenix Framework"//' lib/helloworld_web/components/layouts/root.html.heex \
+  && sed -i '/<header/,/<\/header>/d' lib/helloworld_web/components/layouts.ex \
   && mix ecto.migrate \
   && mix phx.routes \
   && mix phx.digest
 
-# remove the phoenixframework header (logo/nav) from the root layout
-RUN sed -i '/<header/,/<\/header>/d' lib/helloworld_web/components/layouts.ex
-
-# LiveView example: a real-world task manager at /tasks
-# Uses Ecto-backed CRUD (generated context + schema + migration), live search,
+# LiveView example: real-world task manager at /tasks
+# Ecto-backed CRUD (generated context + schema + migration), live search,
 # filtering, inline editing, form validation and PubSub-based live updates.
-RUN mix phx.gen.live Tasks Task tasks title:string description:text priority:integer done:boolean due_date:date --no-scope \
-  && sed -i "s%get \"/\", HelloController%live \"/tasks\", TaskLive.Index, :index\n    live \"/tasks/new\", TaskLive.Form, :new\n    live \"/tasks/:id/edit\", TaskLive.Form, :edit\n    live \"/tasks/:id\", TaskLive.Show, :show\n    get \"/\", HelloController%" lib/helloworld_web/router.ex \
-  # POST fallback routes go through a pipeline without CSRF protection (plain HTTP POSTs have no CSRF token and would return 403 Forbidden)
-  && sed -i "s%pipeline :browser do%pipeline :browser_no_csrf do\n    plug :accepts, [\"html\"]\n    plug :fetch_session\n    plug :fetch_live_flash\n    plug :put_root_layout, html: {GreetingWeb.Layouts, :root}\n    plug :put_secure_browser_headers\n  end\n\n  scope \"/\", GreetingWeb do\n    pipe_through :browser_no_csrf\n\n    post \"/tasks/new\", TaskController, :create\n    post \"/tasks/:id/edit\", TaskController, :update\n    post \"/tasks/:id/delete\", TaskController, :delete\n  end\n\n  pipeline :browser do%" lib/helloworld_web/router.ex \
-  # fallback controller so plain HTTP POST (e.g. when the LiveView socket is unavailable) does not 404
-  && echo "defmodule GreetingWeb.TaskController do\n use GreetingWeb, :controller\n\n alias Greeting.Tasks\n\n def create(conn, %{\"task\" => task_params}) do\n case Tasks.create_task(task_params) do\n {:ok, _task} ->\n conn |> put_flash(:info, \"Task created successfully\") |> redirect(to: ~p\"/tasks\")\n\n {:error, _changeset} ->\n conn |> put_flash(:error, \"Could not create task\") |> redirect(to: ~p\"/tasks/new\")\n end\n end\n\n def update(conn, %{\"id\" => id, \"task\" => task_params}) do\n task = Tasks.get_task!(id)\n\n case Tasks.update_task(task, task_params) do\n {:ok, _task} ->\n conn |> put_flash(:info, \"Task updated successfully\") |> redirect(to: ~p\"/tasks\")\n\n {:error, _changeset} ->\n conn |> put_flash(:error, \"Could not update task\") |> redirect(to: ~p\"/tasks/#{id}/edit\")\n end\n end\n\n def delete(conn, %{\"id\" => id}) do\n task = Tasks.get_task!(id)\n {:ok, _task} = Tasks.delete_task(task)\n\n conn |> put_flash(:info, \"Task deleted successfully\") |> redirect(to: ~p\"/tasks\")\n end\nend\n" > lib/helloworld_web/controllers/task_controller.ex \
-  # set log level to debug
-  && printf '\nconfig :logger, level: :debug\n' >> config/dev.exs \
-  && printf '\nconfig :logger, level: :debug\n' >> config/runtime.exs \
+RUN mix phx.gen.context Tasks Task tasks title:string description:text status:string priority:string completed:boolean \
   && mix ecto.migrate \
-  # broadcast changes so all connected clients see live updates
-  && echo "defmodule Greeting.Tasks.Notifier do\n @topic \"tasks\"\n\n def subscribe do\n Phoenix.PubSub.subscribe(Greeting.PubSub, @topic)\n end\n\n def broadcast({:ok, task}, event) do\n Phoenix.PubSub.broadcast(Greeting.PubSub, @topic, {event, task})\n {:ok, task}\n end\n\n def broadcast({:error, _reason} = error, _event), do: error\nend\n" > lib/helloworld/tasks/notifier.ex \
-  # seed some example data
-  && echo "alias Greeting.{Repo, Tasks.Task}\nRepo.insert!(%Task{title: \"Write project proposal\", description: \"Draft and share with the team\", priority: 1, done: false, due_date: ~D[2025-12-01]})\nRepo.insert!(%Task{title: \"Review pull requests\", description: \"Clear the review queue\", priority: 2, done: false, due_date: ~D[2025-11-15]})\nRepo.insert!(%Task{title: \"Update dependencies\", description: \"Run mix hex.outdated and upgrade\", priority: 3, done: true, due_date: ~D[2025-10-30]})\n" > priv/repo/seeds.exs \
-  && mix run priv/repo/seeds.exs \
-  # make the form submit via HTTP POST (fallback) instead of GET when the LiveView socket is unavailable
-  && sed -i 's%<.form for={@form} id="task-form" phx-change="validate" phx-submit="save">%<.form for={@form} id="task-form" method="post" action={if @live_action == :new, do: ~p"/tasks/new", else: ~p"/tasks/#{@task.id}/edit"} phx-change="validate" phx-submit="save">%' lib/helloworld_web/live/task_live/form.ex \
-  # make delete links use an HTTP POST fallback so delete also works without the LiveView socket
-  && sed -i 's@phx-click={JS.push("delete", value: %{id: task.id}) |> hide("##{id}")}@href={~p"/tasks/#{task.id}/delete"} method="post"@' lib/helloworld_web/live/task_live/index.ex \
-  && { sed -i 's@phx-click={JS.push("delete", value: %{id: @task.id})}@href={~p"/tasks/#{@task.id}/delete"} method="post"@' lib/helloworld_web/live/task_live/show.ex || true; } \
-  && mix compile \
-  && mix phx.routes
+  # add PubSub broadcasting to the generated Tasks context
+  && cat >> lib/helloworld/tasks.ex.broadcast <<'EOF'
+defmodule Greeting.Tasks.Broadcaster do
+  @topic "tasks"
 
-# build static assets (js/css) so /assets/js/app.js and /assets/css/app.css are served
-RUN mix assets.setup \
-  && mix assets.build \
-  && mix phx.digest \
-  && export MIX_ENV=prod \
-  && mix deps.get --only prod \
-  && mix assets.setup \
-  && mix assets.deploy
+  def topic, do: @topic
+
+  def subscribe do
+    Phoenix.PubSub.subscribe(Greeting.PubSub, @topic)
+  end
+
+  def broadcast({:ok, task}, event) do
+    Phoenix.PubSub.broadcast(Greeting.PubSub, @topic, {event, task})
+    {:ok, task}
+  end
+
+  def broadcast({:error, _} = error, _event), do: error
+end
+EOF
+RUN cat lib/helloworld/tasks.ex.broadcast >> lib/helloworld/tasks.ex.new \
+  && cat lib/helloworld/tasks.ex >> lib/helloworld/tasks.ex.new \
+  && mv lib/helloworld/tasks.ex.new lib/helloworld/tasks.ex \
+  && rm lib/helloworld/tasks.ex.broadcast \
+  # wrap create/update/delete with broadcasts
+  && perl -0pi -e 's/(def create_task\(.*?\n(?:.*?\n)*?  end)/$1/s' lib/helloworld/tasks.ex \
+  && perl -0pi -e 's/\|> Repo\.insert\(\)/|> Repo.insert()\n    |> Greeting.Tasks.Broadcaster.broadcast(:task_created)/' lib/helloworld/tasks.ex \
+  && perl -0pi -e 's/\|> Repo\.update\(\)/|> Repo.update()\n    |> Greeting.Tasks.Broadcaster.broadcast(:task_updated)/' lib/helloworld/tasks.ex \
+  && perl -0pi -e 's/Repo\.delete\(task\)/Repo.delete(task) |> Greeting.Tasks.Broadcaster.broadcast(:task_deleted)/' lib/helloworld/tasks.ex \
+  # validations in the schema changeset
+  && perl -0pi -e 's/\|> validate_required\((\[[^\]]*\])\)/|> validate_required($1)\n    |> validate_length(:title, min: 3, max: 100)\n    |> validate_inclusion(:status, ["todo", "in_progress", "done"])\n    |> validate_inclusion(:priority, ["low", "medium", "high"])/' lib/helloworld/tasks/task.ex \
+  # LiveView module
+  && mkdir -p lib/helloworld_web/live \
+  && cat > lib/helloworld_web/live/task_live.ex <<'EOF'
+defmodule GreetingWeb.TaskLive do
+  use GreetingWeb, :live_view
+
+  alias Greeting.Tasks
+  alias Greeting.Tasks.Task, as: TaskItem
+
+  @impl true
+  def mount(_params, _session, socket) do
+    if connected?(socket), do: Greeting.Tasks.Broadcaster.subscribe()
+
+    {:ok,
+     socket
+     |> assign(search: "", status_filter: "all", editing_id: nil)
+     |> assign(:form, to_form(Tasks.change_task(%TaskItem{})))
+     |> load_tasks()}
+  end
+
+  defp load_tasks(socket) do
+    %{search: search, status_filter: status_filter} = socket.assigns
+
+    tasks =
+      Tasks.list_tasks()
+      |> Enum.filter(fn t ->
+        (search == "" or String.contains?(String.downcase(t.title || ""), String.downcase(search))) and
+          (status_filter == "all" or t.status == status_filter)
+      end)
+
+    assign(socket, :tasks, tasks)
+  end
+
+  @impl true
+  def handle_event("search", %{"search" => search}, socket) do
+    {:noreply, socket |> assign(:search, search) |> load_tasks()}
+  end
+
+  def handle_event("filter", %{"status" => status}, socket) do
+    {:noreply, socket |> assign(:status_filter, status) |> load_tasks()}
+  end
+
+  def handle_event("validate", %{"task" => params}, socket) do
+    changeset =
+      %TaskItem{}
+      |> Tasks.change_task(params)
+      |> Map.put(:action, :validate)
+
+    {:noreply, assign(socket, :form, to_form(changeset))}
+  end
+
+  def handle_event("create", %{"task" => params}, socket) do
+    params = Map.merge(%{"status" => "todo", "priority" => "medium", "completed" => "false"}, params)
+
+    case Tasks.create_task(params) do
+      {:ok, _task} ->
+        {:noreply,
+         socket
+         |> assign(:form, to_form(Tasks.change_task(%TaskItem{})))
+         |> put_flash(:info, "Task created")}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :form, to_form(changeset))}
+    end
+  end
+
+  def handle_event("edit", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :editing_id, String.to_integer(id))}
+  end
+
+  def handle_event("cancel-edit", _params, socket) do
+    {:noreply, assign(socket, :editing_id, nil)}
+  end
+
+  def handle_event("update", %{"id" => id, "task" => params}, socket) do
+    task = Tasks.get_task!(id)
+
+    case Tasks.update_task(task, params) do
+      {:ok, _task} -> {:noreply, assign(socket, :editing_id, nil)}
+      {:error, _changeset} -> {:noreply, put_flash(socket, :error, "Invalid task data")}
+    end
+  end
+
+  def handle_event("toggle", %{"id" => id}, socket) do
+    task = Tasks.get_task!(id)
+    {:ok, _} = Tasks.update_task(task, %{completed: !task.completed})
+    {:noreply, socket}
+  end
+
+  def handle_event("delete", %{"id" => id}, socket) do
+    task = Tasks.get_task!(id)
+    {:ok, _} = Tasks.delete_task(task)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({event, _task}, socket)
+      when event in [:task_created, :task_updated, :task_deleted] do
+    {:noreply, load_tasks(socket)}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div>
+      <h1>Task Manager</h1>
+
+      <form phx-change="search">
+        <input type="text" name="search" value={@search} placeholder="Search tasks..." phx-debounce="300" />
+      </form>
+
+      <form phx-change="filter">
+        <select name="status">
+          <option value="all" selected={@status_filter == "all"}>All</option>
+          <option value="todo" selected={@status_filter == "todo"}>Todo</option>
+          <option value="in_progress" selected={@status_filter == "in_progress"}>In progress</option>
+          <option value="done" selected={@status_filter == "done"}>Done</option>
+        </select>
+      </form>
+
+      <.form for={@form} phx-change="validate" phx-submit="create">
+        <.input field={@form[:title]} type="text" label="Title" />
+        <.input field={@form[:description]} type="textarea" label="Description" />
+        <.input field={@form[:status]} type="select" label="Status" options={["todo", "in_progress", "done"]} />
+        <.input field={@form[:priority]} type="select" label="Priority" options={["low", "medium", "high"]} />
+        <button type="submit">Add task</button>
+      </.form>
+
+      <ul id="tasks">
+        <li :for={task <- @tasks} id={"task-#{task.id}"}>
+          <%= if @editing_id == task.id do %>
+            <form phx-submit="update" phx-value-id={task.id}>
+              <input type="hidden" name="id" value={task.id} />
+              <input type="text" name="task[title]" value={task.title} />
+              <input type="text" name="task[description]" value={task.description} />
+              <select name="task[status]">
+                <option :for={s <- ["todo", "in_progress", "done"]} value={s} selected={task.status == s}>{s}</option>
+              </select>
+              <select name="task[priority]">
+                <option :for={p <- ["low", "medium", "high"]} value={p} selected={task.priority == p}>{p}</option>
+              </select>
+              <button type="submit">Save</button>
+              <button type="button" phx-click="cancel-edit">Cancel</button>
+            </form>
+          <% else %>
+            <input type="checkbox" checked={task.completed} phx-click="toggle" phx-value-id={task.id} />
+            <span style={if task.completed, do: "text-decoration: line-through"}>
+              {task.title} [{task.status}/{task.priority}]
+            </span>
+            <button phx-click="edit" phx-value-id={task.id}>Edit</button>
+            <button phx-click="delete" phx-value-id={task.id} data-confirm="Delete this task?">Delete</button>
+          <% end %>
+        </li>
+      </ul>
+    </div>
+    """
+  end
+end
+EOF
+RUN sed -i 's%get "/", HelloController%live "/tasks", TaskLive\n    get "/", HelloController%' lib/helloworld_web/router.ex \
+  && mix compile --warnings-as-errors || mix compile \
+  && mix phx.routes
 
 # generate self-signed certificate and enable SSL/HTTPS
 RUN mkdir -p priv/cert \
   && mix phx.gen.cert selfsigned --output priv/cert/selfsigned --name localhost \
-  && printf '\nconfig :helloworld, GreetingWeb.Endpoint,\n  check_origin: false,\n  http: [\n    ip: {0, 0, 0, 0, 0, 0, 0, 0},\n    port: 4003\n  ],\n  https: [\n    ip: {0, 0, 0, 0, 0, 0, 0, 0},\n    port: 4004,\n    cipher_suite: :strong,\n    certfile: "priv/cert/selfsigned.pem",\n    keyfile: "priv/cert/selfsigned_key.pem"\n  ]\n' >> config/dev.exs \
-  && printf '\nconfig :helloworld, GreetingWeb.Endpoint,\n  check_origin: false,\n  http: [\n    ip: {0, 0, 0, 0, 0, 0, 0, 0},\n    port: 4003\n  ],\n  https: [\n    ip: {0, 0, 0, 0, 0, 0, 0, 0},\n    port: 4004,\n    cipher_suite: :strong,\n    certfile: "priv/cert/selfsigned.pem",\n    keyfile: "priv/cert/selfsigned_key.pem"\n  ]\n' >> config/runtime.exs \
+  && printf '\nconfig :helloworld, GreetingWeb.Endpoint,\n  check_origin: false,\n  http: [\n    ip: {0, 0, 0, 0},\n    port: 4003\n  ],\n  https: [\n    ip: {0, 0, 0, 0},\n    port: 4004,\n    cipher_suite: :strong,\n    certfile: "priv/cert/selfsigned.pem",\n    keyfile: "priv/cert/selfsigned_key.pem"\n  ]\n' >> config/dev.exs \
+  && printf '\nconfig :helloworld, GreetingWeb.Endpoint,\n  check_origin: false,\n  http: [\n    ip: {0, 0, 0, 0},\n    port: 4003\n  ],\n  https: [\n    ip: {0, 0, 0, 0},\n    port: 4004,\n    cipher_suite: :strong,\n    certfile: "priv/cert/selfsigned.pem",\n    keyfile: "priv/cert/selfsigned_key.pem"\n  ]\n' >> config/runtime.exs \
   && mix compile
 
 EXPOSE 4003 4004
