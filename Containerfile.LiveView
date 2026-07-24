@@ -311,6 +311,9 @@ RUN sed -i 's%get "/", HelloController%live "/tasks", TaskLive\n    get "/", Hel
   && mix compile --warnings-as-errors || mix compile \
   && mix phx.routes
 
+# seed tasks
+RUN printf '\nalias Helloworld.{Repo, Task}\n\nRepo.insert!(%%Task{title: "Test task 1", description: "First test task", status: "todo", priority: "high", completed: false})\nRepo.insert!(%%Task{title: "Test task 2", description: "Second test task", status: "in_progress", priority: "medium", completed: false})\nRepo.insert!(%%Task{title: "Test task 3", description: "Third test task", status: "done", priority: "low", completed: true})\n' >> priv/repo/seeds.exs
+
 # generate self-signed certificate and enable SSL/HTTPS
 RUN mkdir -p priv/cert \
   && mix phx.gen.cert selfsigned --output priv/cert/selfsigned --name localhost \
