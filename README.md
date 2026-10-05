@@ -6,7 +6,7 @@
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-grey)](#)
 [![LiveView Ready](https://img.shields.io/badge/LiveView-Yes-brightgreen)](https://hexdocs.pm/phoenix_live_view)
 
-A minimal Phoenix starter to verify your Elixir setup and quickly spin up a web server.
+A minimal [Phoenix Framework](https://www.phoenixframework.org/) starter to verify your Elixir setup and quickly spin up a web server.
 
 ## 📦 Prerequisites
 
