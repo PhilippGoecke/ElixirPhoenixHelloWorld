@@ -23,7 +23,7 @@ Phoenix Up & Running Guide: https://hexdocs.pm/phoenix/up_and_running.html
 ```bash
 bash podman-run-phoenix.bash
 ```
-Visit: http://localhost:4000/hello/World
+Visit: http://localhost:4000/hello/World or http://localhost:4000/?name=Test
 
 ## 📝 License
 MIT
