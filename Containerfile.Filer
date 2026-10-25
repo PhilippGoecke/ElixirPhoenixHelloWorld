@@ -1,0 +1,306 @@
+# change this dockerfile to implement a File Explorer like App to Browse,Create,Delete,Upload and Download Directories and Files
+# GPT 6.1-sol
+# syntax=docker/dockerfile:1
+FROM debian:trixie-slim as phoenix_base
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+
+RUN apt update && apt upgrade -y \
+  # install tools
+  && apt install -y --no-install-recommends unzip curl ca-certificates git \
+  # install erlang runtime dependencies
+  && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
+  # install erlang build dependencies
+  && apt install -y --no-install-recommends autoconf dpkg-dev gcc g++ make libncurses-dev unixodbc-dev libssl-dev libsctp-dev \
+  # install erlang
+  && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/releases/download/OTP-29.1.1/otp_src_29.1.1.tar.gz" \
+  && echo "054e0143e39c780e091107fc9b345792a9c1a55f6bac1eca1c1101510fc06bf6 otp-src.tar.gz" | sha256sum --strict --check - \
+  && export ERL_SRC="/usr/src/otp_src" \
+  && mkdir -vp $ERL_SRC \
+  && tar -xzf otp-src.tar.gz -C $ERL_SRC --strip-components=1 \
+  && rm otp-src.tar.gz \
+  && ( cd $ERL_SRC \
+    && ./otp_build autoconf \
+    && gnuArch="$(dpkg-architecture --query DEB_HOST_GNU_TYPE)" \
+    && ./configure --build="$gnuArch" \
+    && make -j$(nproc) \
+    && make install ) \
+  && find /usr/local -name examples | xargs rm -rf \
+  && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
+  # install elixir
+  && curl --output elixir.zip --location https://github.com/elixir-lang/elixir/releases/download/v1.20.4/elixir-otp-29.zip \
+  && echo "7863c546cda13fecc949e562e326042451dacf8fd8698a36783cb71eeb223b46 elixir.zip" | sha256sum --strict --check - \
+  && unzip elixir.zip -d /usr/local \
+  && rm elixir.zip \
+  && elixir -v \
+  # Elixir build tool
+  && which mix \
+  # install hex & rebar
+  && mix local.hex --force \
+  && mix local.rebar --force \
+  && mix hex.info \
+  # make image smaller
+  && apt purge -y --auto-remove curl unzip \
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+FROM debian:trixie-slim as phoenix_runtime
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+
+RUN apt update && apt upgrade -y \
+  # install tools
+  && apt install -y --no-install-recommends git \
+  # install node.js/npm
+  && apt install -y --no-install-recommends nodejs npm \
+  # install phoenix dependencies
+  && apt install -y --no-install-recommends inotify-tools \
+  # install db
+  && apt install -y --no-install-recommends sqlite3 \
+  # install erlang runtime dependencies
+  && apt install -y --no-install-recommends libodbc2 libssl3 libsctp1 \
+  # install healthcheck dependencies
+  && apt install -y --no-install-recommends curl zip \
+  # make image smaller
+  && rm -rf "/var/lib/apt/lists/*" \
+  && rm -rf /var/cache/apt/archives
+
+COPY --from=phoenix_base /usr/local /usr/local
+
+# add user and set home directory
+ARG USER=phoenix
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR /phoenix
+RUN chown "$USER:$USER" /phoenix
+USER $USER
+
+RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
+  && elixir -v \
+  && which mix
+
+# install phoenix 1.8.15
+RUN mix archive.install hex phx_new --force 1.8.15 \
+  && mix phx.new --version
+
+# https://hexdocs.pm/phoenix/up_and_running.html
+RUN mix phx.new --version \
+  && mix phx.new hello_app --module Greeting --app helloworld --database sqlite3 --no-dashboard \
+  && cd hello_app \
+  && export SECRET_KEY_BASE=$(mix phx.gen.secret) \
+  && mix deps.get \
+  && mix assets.setup \
+  && mix deps.compile
+
+WORKDIR /phoenix/hello_app
+
+RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
+  && sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs \
+  # disable forcing HTTPS redirects in production
+  && { perl -0pi -e 's/force_ssl:\s*(\[(?:[^\[\]]++|(?1))*+\])/force_ssl: false/gs' config/prod.exs || true; } \
+  && { sed -i 's/force_ssl:.*/force_ssl: false/' config/runtime.exs || true; }
+
+# All explorer operations are confined to FILE_EXPLORER_ROOT. Mount a volume
+# there for persistence; put authentication in front of any public deployment.
+ENV FILE_EXPLORER_ROOT=/phoenix/files
+RUN <<'SHELL'
+set -eu
+mkdir -p "$FILE_EXPLORER_ROOT" lib/helloworld_web/controllers/explorer_html
+sed -i 's/get "\/", PageController, :home/get "\/", ExplorerController, :index\n    post "\/create", ExplorerController, :create\n    post "\/upload", ExplorerController, :upload\n    post "\/delete", ExplorerController, :delete\n    get "\/download", ExplorerController, :download/' lib/helloworld_web/router.ex
+cat > lib/helloworld_web/controllers/explorer_controller.ex <<'ELIXIR'
+defmodule GreetingWeb.ExplorerController do
+  use GreetingWeb, :controller
+
+  def index(conn, params) do
+    protect(conn, fn ->
+      relative = params["path"] || ""
+      directory = resolve!(relative)
+      entries = directory |> File.ls!() |> Enum.map(fn name ->
+        stat = File.lstat!(Path.join(directory, name))
+        %{name: name, path: join(relative, name), type: stat.type, size: stat.size}
+      end) |> Enum.sort_by(fn entry -> {entry.type != :directory, String.downcase(entry.name)} end)
+
+      render(conn, :index, layout: false, path: relative,
+        parent: if(relative == "", do: nil, else: parent(relative)), entries: entries)
+    end)
+  end
+
+  def create(conn, params) do
+    mutate(conn, params, fn directory ->
+      target = Path.join(directory, name!(params["name"]))
+      case params["kind"] do
+        "directory" -> File.mkdir!(target)
+        "file" ->
+          {:ok, file} = File.open(target, [:write, :exclusive])
+          File.close(file)
+        _ -> raise ArgumentError, "Invalid entry type"
+      end
+    end)
+  end
+
+  def upload(conn, params) do
+    mutate(conn, params, fn directory ->
+      %Plug.Upload{path: source, filename: filename} = params["file"]
+      target = Path.join(directory, name!(filename))
+      # Exclusive creation prevents overwriting files or following symlinks.
+      File.open!(target, [:write, :exclusive], fn output ->
+        source |> File.stream!([], 64 * 1024) |> Enum.each(&IO.binwrite(output, &1))
+      end)
+    end)
+  end
+
+  def delete(conn, params) do
+    mutate(conn, params, fn directory ->
+      File.rm_rf!(Path.join(directory, name!(params["name"])))
+    end)
+  end
+
+  def download(conn, params) do
+    protect(conn, fn ->
+      target = resolve!(params["path"] || "")
+      if File.dir?(target) do
+        temporary = Path.join(System.tmp_dir!(), "explorer-" <> Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false))
+        File.mkdir!(temporary)
+        archive = Path.join(temporary, "download.zip")
+        try do
+          # Store symlinks rather than following them outside the explorer root.
+          {_, 0} = System.cmd("zip", ["-r", "-q", "-y", archive, "."], cd: target)
+          send_download(conn, {:binary, File.read!(archive)}, filename: Path.basename(target) <> ".zip")
+        after
+          File.rm_rf!(temporary)
+        end
+      else
+        send_download(conn, {:file, target}, filename: Path.basename(target))
+      end
+    end)
+  end
+
+  defp mutate(conn, params, operation) do
+    protect(conn, fn ->
+      relative = params["path"] || ""
+      operation.(resolve!(relative))
+      redirect(conn, to: "/?" <> URI.encode_query(%{"path" => relative}))
+    end)
+  end
+
+  defp resolve!(relative) when is_binary(relative) do
+    root = System.fetch_env!("FILE_EXPLORER_ROOT") |> Path.expand()
+    parts = String.split(relative, "/", trim: true)
+    if String.starts_with?(relative, "/"), do: raise(ArgumentError, "Invalid path")
+    Enum.reduce(parts, root, fn part, current ->
+      next = Path.join(current, name!(part))
+      if File.lstat!(next).type == :symlink, do: raise(ArgumentError, "Symlinks are disabled")
+      next
+    end)
+  end
+
+  defp name!(name) when is_binary(name) do
+    if name in ["", ".", ".."] or String.contains?(name, ["/", "\\", <<0>>]),
+      do: raise(ArgumentError, "Invalid name")
+    name
+  end
+  defp name!(_), do: raise(ArgumentError, "Name is required")
+  defp join("", name), do: name
+  defp join(path, name), do: path <> "/" <> name
+  defp parent(path), do: path |> String.split("/", trim: true) |> Enum.drop(-1) |> Enum.join("/")
+
+  defp protect(conn, operation) do
+    try do
+      operation.()
+    rescue
+      _ -> conn |> put_status(:bad_request) |> text("Operation failed. Check the path, permissions, and whether the name already exists.")
+    end
+  end
+end
+ELIXIR
+cat > lib/helloworld_web/controllers/explorer_html.ex <<'ELIXIR'
+defmodule GreetingWeb.ExplorerHTML do
+  use GreetingWeb, :html
+  embed_templates "explorer_html/*"
+end
+ELIXIR
+cat > lib/helloworld_web/controllers/explorer_html/index.html.heex <<'HEEX'
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>File Explorer</title>
+    <style>
+      body{font:16px system-ui;background:#f4f6fa;color:#182235;margin:0;padding:2rem}
+      main{max-width:1100px;margin:auto;background:white;padding:2rem;border-radius:12px}
+      a{color:#2457bb}section{display:flex;gap:1rem;flex-wrap:wrap;margin:1.5rem 0}
+      form{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}input,select,button{font:inherit;padding:.5rem}
+      button{cursor:pointer}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:.8rem;border-bottom:1px solid #ddd}
+      .actions{display:flex;gap:1rem;align-items:center}small{color:#586579}
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>File Explorer</h1>
+      <nav><a href="/">Root</a> / <%= @path %></nav>
+      <p :if={@parent != nil}><a href={"/?" <> URI.encode_query(%{"path" => @parent})}>← Parent directory</a></p>
+      <section>
+        <form action="/create" method="post">
+          <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+          <input type="hidden" name="path" value={@path} />
+          <input name="name" placeholder="New name" aria-label="New name" required />
+          <select name="kind" aria-label="Entry type"><option value="directory">Directory</option><option value="file">File</option></select>
+          <button>Create</button>
+        </form>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+          <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+          <input type="hidden" name="path" value={@path} />
+          <input type="file" name="file" aria-label="Upload file" required />
+          <button>Upload</button>
+        </form>
+      </section>
+      <p><a href={"/download?" <> URI.encode_query(%{"path" => @path})}>Download this directory (.zip)</a></p>
+      <table>
+        <thead><tr><th>Name</th><th>Type</th><th>Size (bytes)</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr :for={entry <- @entries}>
+            <td>
+              <a :if={entry.type == :directory} href={"/?" <> URI.encode_query(%{"path" => entry.path})}><%= entry.name %>/</a>
+              <span :if={entry.type != :directory}><%= entry.name %></span>
+            </td>
+            <td><%= entry.type %></td><td><%= entry.size %></td>
+            <td class="actions">
+              <a :if={entry.type in [:regular, :directory]} href={"/download?" <> URI.encode_query(%{"path" => entry.path})}>Download</a>
+              <form action="/delete" method="post" onsubmit="return confirm('Permanently delete this entry and all its contents?')">
+                <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+                <input type="hidden" name="path" value={@path} />
+                <input type="hidden" name="name" value={entry.name} />
+                <button>Delete</button>
+              </form>
+            </td>
+          </tr>
+          <tr :if={@entries == []}><td colspan="4">This directory is empty.</td></tr>
+        </tbody>
+      </table>
+      <p><small>Existing files are never overwritten. Symlink browsing is disabled. Uploads use Phoenix's default request size limit.</small></p>
+    </main>
+  </body>
+</html>
+HEEX
+# Disable HTTPS redirects for this HTTP container; terminate TLS at the proxy.
+cat > config/prod.exs <<'ELIXIR'
+import Config
+config :helloworld, GreetingWeb.Endpoint,
+  cache_static_manifest: "priv/static/cache_manifest.json",
+  force_ssl: false
+config :logger, level: :info
+ELIXIR
+mix assets.deploy
+MIX_ENV=prod mix compile
+SHELL
+
+EXPOSE 4000
+
+CMD export MIX_ENV=prod PHX_SERVER=true PHX_HOST="${PHX_HOST:-localhost}" DATABASE_PATH="${DATABASE_PATH:-/phoenix/my_app_prod.db}" SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(mix phx.gen.secret)}"; mix ecto.migrate && exec mix phx.server
+
+HEALTHCHECK CMD curl -f "http://localhost:4000/" || exit 1
