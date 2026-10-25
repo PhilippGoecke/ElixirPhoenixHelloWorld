@@ -1,5 +1,3 @@
-# change this dockerfile to implement a File Explorer like App to Browse,Create,Delete,Upload and Download Directories and Files
-# GPT 6.1-sol
 # syntax=docker/dockerfile:1
 FROM debian:trixie-slim as phoenix_base
 
@@ -295,8 +293,10 @@ config :helloworld, GreetingWeb.Endpoint,
   force_ssl: false
 config :logger, level: :info
 ELIXIR
+# Compile first to generate phoenix-colocated assets in the same build environment.
+export MIX_ENV=prod
+mix compile
 mix assets.deploy
-MIX_ENV=prod mix compile
 SHELL
 
 EXPOSE 4000
