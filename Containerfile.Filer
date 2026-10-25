@@ -89,6 +89,7 @@ RUN mix archive.install hex phx_new --force 1.8.15 \
 RUN mix phx.new --version \
   && mix phx.new hello_app --module Greeting --app helloworld --database sqlite3 --no-dashboard \
   && cd hello_app \
+  && sed -i '/{:phoenix, /a\      {:hackney, "~> 1.20"},' mix.exs \
   && export SECRET_KEY_BASE=$(mix phx.gen.secret) \
   && mix deps.get \
   && mix assets.setup \
