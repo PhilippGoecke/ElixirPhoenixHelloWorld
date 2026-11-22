@@ -13,8 +13,8 @@ RUN apt update && apt upgrade -y \
   # install erlang build dependencies
   && apt install -y --no-install-recommends autoconf dpkg-dev gcc g++ make libncurses-dev unixodbc-dev libssl-dev libsctp-dev \
   # install erlang
-  && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/releases/download/OTP-29.1.1/otp_src_29.1.1.tar.gz" \
-  && echo "054e0143e39c780e091107fc9b345792a9c1a55f6bac1eca1c1101510fc06bf6 otp-src.tar.gz" | sha256sum --strict --check - \
+  && curl -fSL -o otp-src.tar.gz "https://github.com/erlang/otp/releases/download/OTP-29.1.2/otp_src_29.1.2.tar.gz" \
+  && echo "c79966661e35fe4aff8ec003db63682e3b33b10b672220d51bf93c0a9244b049 otp-src.tar.gz" | sha256sum --strict --check - \
   && export ERL_SRC="/usr/src/otp_src" \
   && mkdir -vp $ERL_SRC \
   && tar -xzf otp-src.tar.gz -C $ERL_SRC --strip-components=1 \
@@ -28,8 +28,8 @@ RUN apt update && apt upgrade -y \
   && find /usr/local -name examples | xargs rm -rf \
   && erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   # install elixir
-  && curl --output elixir.zip --location https://github.com/elixir-lang/elixir/releases/download/v1.20.4/elixir-otp-29.zip \
-  && echo "7863c546cda13fecc949e562e326042451dacf8fd8698a36783cb71eeb223b46 elixir.zip" | sha256sum --strict --check - \
+  && curl --output elixir.zip --location https://github.com/elixir-lang/elixir/releases/download/v1.20.5/elixir-otp-29.zip \
+  && echo "f424d6f0bb710a1d4898f2645d8ad6cab3f5eab8d71848c0dda2579d3a8e8a06 elixir.zip" | sha256sum --strict --check - \
   && unzip elixir.zip -d /usr/local \
   && rm elixir.zip \
   && elixir -v \
