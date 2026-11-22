@@ -106,11 +106,11 @@ RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
 
 # https://devhints.io/phoenix
 RUN mix phx.routes \
-  && sed -i "s%get \"/\"%get \"/\", HelloController, :world, assigns: \%{name: \"World\"}\n    get \"/hello/\", HelloController, :world, assigns: \%{name: \"World\"}\n    get \"/hello/:name\", HelloController, :world\n    #get \"\/\"%g" lib/helloworld_web/router.ex \
-  && echo "defmodule GreetingWeb.HelloController do\n use GreetingWeb, :controller\n\n def world(conn, params) do\n name = params[\"name\"] || conn.assigns[:name]\n greeting = Greeting.Greetings.Hello |> Ash.ActionInput.for_action(:greet, %{name: name}) |> Ash.run_action!()\n render(conn, \"world.html\", greeting: greeting)\n end\nend\n" > lib/helloworld_web/controllers/hello_controller.ex \
-  && echo "defmodule GreetingWeb.HelloHTML do\n\n use GreetingWeb, :html\n\n embed_templates \"hello_html/*\"\nend" > lib/helloworld_web/controllers/hello_html.ex \
+  && sed -i 's|^[[:space:]]*get "/".*$|    get "/", HelloController, :world, assigns: %{name: "World"}\n    get "/hello/", HelloController, :world, assigns: %{name: "World"}\n    get "/hello/:name", HelloController, :world|' lib/helloworld_web/router.ex \
+  && printf '%s\n' 'defmodule GreetingWeb.HelloController do' '  use GreetingWeb, :controller' '' '  def world(conn, params) do' '    name = params["name"] || conn.assigns[:name]' '    greeting =' '      Greeting.Greetings.Hello' '      |> Ash.ActionInput.for_action(:greet, %{name: name})' '      |> Ash.run_action!()' '' '    render(conn, "world.html", greeting: greeting)' '  end' 'end' > lib/helloworld_web/controllers/hello_controller.ex \
+  && printf '%s\n' 'defmodule GreetingWeb.HelloHTML do' '  use GreetingWeb, :html' '' '  embed_templates "hello_html/*"' 'end' > lib/helloworld_web/controllers/hello_html.ex \
   && mkdir -p lib/helloworld_web/controllers/hello_html \
-  && echo "<h1><%= @greeting %></h1>\n <!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Ash <%= Application.spec(:ash, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> (<%= File.read!(Path.join([:code.root_dir(), "releases", :erlang.system_info(:otp_release), "OTP_VERSION"])) |> String.trim() %>) -->" > lib/helloworld_web/controllers/hello_html/world.html.heex \
+  && printf '%s\n' '<h1><%= @greeting %></h1>' ' <!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Ash <%= Application.spec(:ash, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> -->' > lib/helloworld_web/controllers/hello_html/world.html.heex \
   && sed -i 's/ suffix=" · Phoenix Framework"//' lib/helloworld_web/components/layouts/root.html.heex \
   && sed -i '/<header/,/<\/header>/d' lib/helloworld_web/components/layouts.ex \
   && mix ecto.migrate \
