@@ -5,6 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-grey)](#)
 [![LiveView Ready](https://img.shields.io/badge/LiveView-Yes-brightgreen)](https://hexdocs.pm/phoenix_live_view)
+[![Ash](https://img.shields.io/badge/Ash-Framework-7C3AED)](https://ash-hq.org)
 
 A minimal [Phoenix Framework](https://www.phoenixframework.org/) starter to verify your Elixir setup and quickly spin up a web server.
 
