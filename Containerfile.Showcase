@@ -68,6 +68,13 @@ RUN apt update && apt upgrade -y \
 
 COPY --from=phoenix_base /usr/local /usr/local
 
+# add user and set home directory
+ARG USER=phoenix
+RUN useradd --create-home --shell /bin/bash $USER
+ARG HOME="/home/$USER"
+WORKDIR /phoenix
+USER $USER
+
 RUN erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell \
   && elixir -v \
   && which mix
@@ -85,69 +92,126 @@ RUN mix phx.new --version \
   && mix assets.setup \
   && mix deps.compile
 
-WORKDIR /hello_app
+WORKDIR /phoenix/hello_app
 
 RUN sed -i 's/localhost/0.0.0.0/g' config/config.exs \
-  && sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs
+  && sed -i 's/127, 0, 0, 1/0, 0, 0, 0/g' config/dev.exs \
+  # disable forcing HTTPS redirects in production
+  && { perl -0pi -e 's/force_ssl:\s*(\[(?:[^\[\]]++|(?1))*+\])/force_ssl: false/gs' config/prod.exs || true; } \
+  && { sed -i 's/force_ssl:.*/force_ssl: false/' config/runtime.exs || true; }
 
-# ---------------------------------------------------------------------------
-# Showcase Phoenix features
-# ---------------------------------------------------------------------------
 # https://devhints.io/phoenix
-#
-# 1) Plain controller + HEEx template  (classic request/response)
-# 2) `mix phx.gen.html`                (context + schema + CRUD UI + tests)
-# 3) `mix phx.gen.json`                (JSON REST API + context reuse)
-# 4) `mix phx.gen.live`                (LiveView CRUD with real-time updates)
-# 5) `mix phx.gen.channel`             (WebSocket channels via Phoenix.Channel)
-# 6) `mix phx.gen.auth`                (full authentication system)
-# 7) `mix phx.gen.presence`            (Phoenix.Presence for tracking users)
-# 8) Telemetry, PubSub, Ecto migrations, asset pipeline (esbuild + tailwind)
-# ---------------------------------------------------------------------------
-
-# (1) Plain controller + HEEx template showing app/runtime versions
 RUN mix phx.routes \
-  && sed -i "s%get \"/\"%get \"/hello/:name\", HelloController, :world\n #get \"\/\"%g" lib/helloworld_web/router.ex \
-  && echo "defmodule GreetingWeb.HelloController do\n use GreetingWeb, :controller\n\n def world(conn, params) do\n name = params[\"name\"]\n render(conn, \"world.html\", name: name)\n end\nend\n" > lib/helloworld_web/controllers/hello_controller.ex \
+  && sed -i "s%get \"/\"%get \"/\", HelloController, :world, assigns: \%{name: \"World\"}\n    get \"/hello/\", HelloController, :world, assigns: \%{name: \"World\"}\n    get \"/hello/:name\", HelloController, :world\n    #get \"\/\"%g" lib/helloworld_web/router.ex \
+  && echo "defmodule GreetingWeb.HelloController do\n use GreetingWeb, :controller\n\n def world(conn, params) do\n name = params[\"name\"] || conn.assigns[:name]\n render(conn, \"world.html\", name: name)\n end\nend\n" > lib/helloworld_web/controllers/hello_controller.ex \
   && echo "defmodule GreetingWeb.HelloHTML do\n\n use GreetingWeb, :html\n\n embed_templates \"hello_html/*\"\nend" > lib/helloworld_web/controllers/hello_html.ex \
   && mkdir -p lib/helloworld_web/controllers/hello_html \
-  && echo "<h1>Hello <%= @name %>!</h1>\n <!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> -->" > lib/helloworld_web/controllers/hello_html/world.html.heex
-
-# (2) HTML CRUD generator: context `Blog`, schema `Post` -> /posts
-RUN mix phx.gen.html Blog Post posts title:string body:text views:integer --no-context --no-schema 2>/dev/null; \
-    mix phx.gen.html Blog Post posts title:string body:text views:integer \
-  && sed -i "/scope \"\/\", GreetingWeb do/a\\    resources \"/posts\", PostController" lib/helloworld_web/router.ex
-
-# (3) JSON REST API generator: /api/products
-RUN mix phx.gen.json Catalog Product products name:string price:float sku:string:unique \
-  && sed -i "/scope \"\/api\", GreetingWeb do/,/^  end/{s%pipe_through :api%pipe_through :api\n    resources \"/products\", ProductController, except: [:new, :edit]%}" lib/helloworld_web/router.ex \
-  || true
-
-# (4) LiveView CRUD with real-time updates via Phoenix.PubSub
-RUN mix phx.gen.live Chat Message messages user:string body:text \
-  && sed -i "/scope \"\/\", GreetingWeb do/a\\    live \"/messages\", MessageLive.Index, :index\n    live \"/messages/new\", MessageLive.Index, :new\n    live \"/messages/:id/edit\", MessageLive.Index, :edit\n    live \"/messages/:id\", MessageLive.Show, :show\n    live \"/messages/:id/show/edit\", MessageLive.Show, :edit" lib/helloworld_web/router.ex \
-  || true
-
-# (5) WebSocket channel (Phoenix.Channel) for "room:lobby"
-RUN mix phx.gen.channel Room || true
-
-# (6) Authentication scaffolding (mix phx.gen.auth)
-RUN mix deps.get \
-  && (yes | mix phx.gen.auth Accounts User users --hashing-lib bcrypt) || true \
-  && mix deps.get
-
-# (7) Phoenix.Presence for tracking connected users
-RUN mix phx.gen.presence || true
-
-# Run migrations for everything generated above, then compile & digest assets
-RUN mix ecto.migrate \
-  && mix compile \
+  && echo "<h1>Hello <%= @name %>!</h1>\n <!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> (<%= File.read!(Path.join([:code.root_dir(), \"releases\", :erlang.system_info(:otp_release), \"OTP_VERSION\"])) |> String.trim() %>) -->" > lib/helloworld_web/controllers/hello_html/world.html.heex \
+  && sed -i 's/ suffix=" · Phoenix Framework"//' lib/helloworld_web/components/layouts/root.html.heex \
+  && sed -i '/<header/,/<\/header>/d' lib/helloworld_web/components/layouts.ex \
+  && mix ecto.migrate \
   && mix phx.routes \
-  && mix assets.deploy \
   && mix phx.digest
 
 EXPOSE 4000
 
-CMD MIX_ENV=prod DATABASE_PATH=/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
+# Showcase Phoenix features with a browser UI and JSON API.
+RUN echo "defmodule GreetingWeb.HelloController do
+  use GreetingWeb, :controller
 
-HEALTHCHECK CMD curl -f "http://localhost:4000/" || exit 1
+  def world(conn, params) do
+    name = params[\"name\"] || conn.assigns[:name] || \"World\"
+    render(conn, \"world.html\", name: name)
+  end
+
+  def showcase(conn, _params) do
+    render(conn, \"showcase.html\")
+  end
+
+  def status(conn, _params) do
+    json(conn, %{
+      application: \"Greeting\",
+      phoenix: Application.spec(:phoenix, :vsn) |> to_string(),
+      elixir: System.version(),
+      otp: :erlang.system_info(:otp_release) |> to_string(),
+      database: \"sqlite3\",
+      status: \"ok\"
+    })
+  end
+
+  def echo(conn, params) do
+    json(conn, %{echo: params})
+  end
+end
+" > lib/helloworld_web/controllers/hello_controller.ex \
+  && echo "defmodule GreetingWeb.HelloHTML do
+  use GreetingWeb, :html
+
+  embed_templates \"hello_html/*\"
+end
+" > lib/helloworld_web/controllers/hello_html.ex \
+  && mkdir -p lib/helloworld_web/controllers/hello_html \
+  && cat > lib/helloworld_web/controllers/hello_html/showcase.html.heex <<'HEEX'
+<section style="max-width: 960px; margin: 3rem auto; font-family: system-ui, sans-serif">
+  <header style="margin-bottom: 2rem">
+    <p style="text-transform: uppercase; letter-spacing: .12em; color: #7c3aed">Phoenix showcase</p>
+    <h1 style="font-size: clamp(2.5rem, 8vw, 5rem); margin: .25rem 0">Built for productive, real-time web apps.</h1>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem">
+    <article style="border: 1px solid #ddd; border-radius: 12px; padding: 1rem">
+      <h2>Controllers</h2>
+      <p>Typed-by-convention request handling.</p>
+      <a href="/hello/Phoenix">Try a greeting</a>
+    </article>
+    <article style="border: 1px solid #ddd; border-radius: 12px; padding: 1rem">
+      <h2>HEEx templates</h2>
+      <p>Fast server-rendered HTML with safe, compiled templates.</p>
+      <a href="/">View the home route</a>
+    </article>
+    <article style="border: 1px solid #ddd; border-radius: 12px; padding: 1rem">
+      <h2>JSON API</h2>
+      <p>Return structured data for mobile and SPA clients.</p>
+      <a href="/api/status">/api/status</a>
+    </article>
+    <article style="border: 1px solid #ddd; border-radius: 12px; padding: 1rem">
+      <h2>Ecto & SQLite</h2>
+      <p>Schema migrations and database-backed contexts.</p>
+      <code>mix ecto.migrate</code>
+    </article>
+  </div>
+
+  <pre style="margin-top: 2rem; background: #171717; color: #fff; padding: 1rem; border-radius: 12px; overflow: auto"><code>curl -X POST http://localhost:4000/api/echo \
+  -H 'content-type: application/json' \
+  -d '{"message":"Hello, Phoenix!"}'</code></pre>
+
+  <p style="margin-top: 2rem; color: #555">
+    Phoenix <%= Application.spec(:phoenix, :vsn) %> · Elixir <%= System.version() %> · Erlang/OTP <%= :erlang.system_info(:otp_release) %>
+  </p>
+</section>
+HEEX
+  && cat > lib/helloworld_web/controllers/hello_html/world.html.heex <<'HEEX'
+<main style="min-height: 70vh; display:grid; place-content:center; text-align:center; font-family: system-ui, sans-serif">
+  <h1>Hello <%= @name %>!</h1>
+  <p><a href="/showcase">Explore the Phoenix feature showcase</a></p>
+  <!-- Phoenix <%= Application.spec(:phoenix, :vsn) %>, Elixir <%= System.version() %>, Erlang/OTP <%= :erlang.system_info(:otp_release) %> -->
+</main>
+HEEX
+  && cat >> lib/helloworld_web/router.ex <<'ROUTER'
+
+  scope "/api", GreetingWeb do
+    pipe_through :api
+
+    get "/status", HelloController, :status
+    post "/echo", HelloController, :echo
+  end
+ROUTER
+  && sed -i '/    get "\/hello\/",/a\    get "/showcase", HelloController, :showcase,' lib/helloworld_web/router.ex \
+  && mix format \
+  && mix phx.routes
+
+ENV PHX_SERVER=true
+
+CMD MIX_ENV=prod PHX_HOST=localhost DATABASE_PATH=/phoenix/my_app_prod.db SECRET_KEY_BASE=`mix phx.gen.secret` mix phx.server
+
+HEALTHCHECK CMD curl -f "http://localhost:4000/showcase" || exit 1
