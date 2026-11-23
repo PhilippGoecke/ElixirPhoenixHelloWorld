@@ -89,6 +89,7 @@ RUN mix phx.new --version \
   && cd hello_app \
   && sed -i 's/{:phoenix,/{:ash, "~> 3.0"},\n      {:phoenix,/' mix.exs \
   && mkdir -p lib/helloworld/greetings \
+  && mkdir -p lib/helloworld \
   && printf '%s\n' 'defmodule Greeting.Greetings do' '  use Ash.Domain' '' '  resources do' '    resource Greeting.Greetings.Hello' '  end' 'end' > lib/helloworld/greetings.ex \
   && printf '%s\n' 'defmodule Greeting.Greetings.Hello do' '  use Ash.Resource, domain: Greeting.Greetings' '' '  actions do' '    action :greet, :string do' '      argument :name, :string, allow_nil?: false' '      run fn input, _context -> {:ok, "Hello #{input.arguments.name}!"} end' '    end' '  end' 'end' > lib/helloworld/greetings/hello.ex \
   && export SECRET_KEY_BASE=$(mix phx.gen.secret) \
