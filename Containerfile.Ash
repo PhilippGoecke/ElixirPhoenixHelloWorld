@@ -90,9 +90,8 @@ RUN mix phx.new --version \
   && sed -i 's/{:phoenix,/{:ash, "~> 3.0"},\n      {:phoenix,/' mix.exs \
   && printf '\nconfig :ash, :default_string_length_count, :codepoints\n' >> config/config.exs \
   && mkdir -p lib/helloworld/greetings \
-  && mkdir -p lib/helloworld \
-  && printf '%s\n' 'defmodule Greeting.Greetings do' '  use Ash.Domain' '' '  resources do' '    resource Greeting.Greetings.Hello' '  end' 'end' > lib/helloworld/greetings.ex \
-  && printf '%s\n' 'defmodule Greeting.Greetings.Hello do' '  use Ash.Resource, domain: Greeting.Greetings' '' '  actions do' '    action :greet, :string do' '      argument :name, :string, allow_nil?: false' '      run fn input, _context -> {:ok, "Hello #{input.arguments.name}!"} end' '    end' '  end' 'end' > lib/helloworld/greetings/hello.ex \
+  && echo -e 'defmodule Greeting.Greetings do\n  use Ash.Domain\n\n  resources do\n    resource Greeting.Greetings.Hello\n  end\nend' > lib/helloworld/greetings.ex \
+  && echo -e 'defmodule Greeting.Greetings.Hello do\n  use Ash.Resource, domain: Greeting.Greetings\n\n  actions do\n    action :greet, :string do\n      argument :name, :string, allow_nil?: false\n      run fn input, _context -> {:ok, "Hello #{input.arguments.name}!"} end\n    end\n  end\nend' > lib/helloworld/greetings/hello.ex \
   && export SECRET_KEY_BASE=$(mix phx.gen.secret) \
   && mix deps.get \
   && mix assets.setup \
