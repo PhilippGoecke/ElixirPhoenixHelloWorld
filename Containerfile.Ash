@@ -88,7 +88,7 @@ RUN mix phx.new --version \
   && mix phx.new hello_app --module Greeting --app helloworld --database sqlite3 --no-dashboard \
   && cd hello_app \
   && sed -i 's/{:phoenix,/{:ash, "~> 3.0"},\n      {:phoenix,/' mix.exs \
-  && printf '\nconfig :ash, :default_string_length_count, 255\n' >> config/config.exs \
+  && printf '\nconfig :ash, :default_string_length_count, :codepoint\n' >> config/config.exs \
   && mkdir -p lib/helloworld/greetings \
   && mkdir -p lib/helloworld \
   && printf '%s\n' 'defmodule Greeting.Greetings do' '  use Ash.Domain' '' '  resources do' '    resource Greeting.Greetings.Hello' '  end' 'end' > lib/helloworld/greetings.ex \
